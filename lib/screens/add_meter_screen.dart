@@ -63,7 +63,7 @@ class _AddMeterScreenState extends State<AddMeterScreen> {
                       ),
                     ),
                     const Text(
-                      "Link a new meter to your account for real-time remote management from any distance.",
+                      "Link aew meter to your account for real-time remote management from any distance.",
                       style: TextStyle(color: AppTheme.subTextColor, fontSize: 16, height: 1.5),
                     ),
                     const SizedBox(height: 48),
