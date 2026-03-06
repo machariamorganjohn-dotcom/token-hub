@@ -1,0 +1,159 @@
+import 'dart:convert';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'security_service.dart';
+
+class StorageService {
+  static const String keyBalance = 'user_balance';
+  static const String keyUserName = 'user_name';
+  static const String keyUserPhone = 'user_phone';
+  static const String keyMeters = 'saved_meters';
+  static const String keyTransactions = 'user_transactions';
+  static const String keyLoginHistory = 'login_history';
+  static const String keyActiveMeter = 'active_meter';
+
+  static Future<void> saveBalance(double balance) async {
+    final prefs = await SharedPreferences.getInstance();
+    final security = SecurityService();
+    await prefs.setString(keyBalance, security.encryptData(balance.toString()));
+  }
+
+  static Future<double> getBalance() async {
+    final prefs = await SharedPreferences.getInstance();
+    final security = SecurityService();
+    final encrypted = prefs.getString(keyBalance);
+    if (encrypted == null) return 45.2;
+    try {
+      final decrypted = security.decryptData(encrypted);
+      return double.tryParse(decrypted) ?? 45.2;
+    } catch (e) {
+      return 45.2;
+    }
+  }
+
+  static Future<void> saveUserData(String name, String phone) async {
+    final prefs = await SharedPreferences.getInstance();
+    final security = SecurityService();
+    await prefs.setString(keyUserName, security.encryptData(name));
+    await prefs.setString(keyUserPhone, security.encryptData(phone));
+  }
+
+  static Future<Map<String, String>> getUserData() async {
+    final prefs = await SharedPreferences.getInstance();
+    final security = SecurityService();
+    final encryptedName = prefs.getString(keyUserName);
+    final encryptedPhone = prefs.getString(keyUserPhone);
+    
+    return {
+      'name': encryptedName != null ? security.decryptData(encryptedName) : 'User',
+      'phone': encryptedPhone != null ? security.decryptData(encryptedPhone) : '',
+    };
+  }
+
+  // Transaction Storage
+  static Future<void> saveTransaction(Map<String, String> transaction) async {
+    final prefs = await SharedPreferences.getInstance();
+    final security = SecurityService();
+    List<Map<String, String>> transactions = await getTransactions();
+    transactions.insert(0, transaction); // Most recent first
+    
+    final jsonStr = jsonEncode(transactions);
+    await prefs.setString(keyTransactions, security.encryptData(jsonStr));
+  }
+
+  static Future<List<Map<String, String>>> getTransactions() async {
+    final prefs = await SharedPreferences.getInstance();
+    final security = SecurityService();
+    final String? encrypted = prefs.getString(keyTransactions);
+    if (encrypted == null) return [];
+    
+    try {
+      final decrypted = security.decryptData(encrypted);
+      final List<dynamic> decoded = jsonDecode(decrypted);
+      return decoded.map((m) => Map<String, String>.from(m)).toList();
+    } catch (e) {
+      return [];
+    }
+  }
+
+  // Meter Storage
+  static Future<void> saveMeter(String name, String number) async {
+    final prefs = await SharedPreferences.getInstance();
+    final security = SecurityService();
+    List<Map<String, String>> meters = await getMeters();
+    
+    final existingIndex = meters.indexWhere((m) => m['number'] == number);
+    
+    if (existingIndex != -1) {
+      meters[existingIndex]['name'] = name;
+    } else {
+      meters.add({'name': name, 'number': number});
+    }
+    
+    // Encrypt the entire collection or per item - per collection is easier for simulation
+    final jsonStr = jsonEncode(meters);
+    await prefs.setString(keyMeters, security.encryptData(jsonStr));
+  }
+
+  static Future<List<Map<String, String>>> getMeters() async {
+    final prefs = await SharedPreferences.getInstance();
+    final security = SecurityService();
+    final String? encrypted = prefs.getString(keyMeters);
+    if (encrypted == null) return [];
+    
+    try {
+      final decrypted = security.decryptData(encrypted);
+      final List<dynamic> decoded = jsonDecode(decrypted);
+      return decoded.map((m) => Map<String, String>.from(m)).toList();
+    } catch (e) {
+      return [];
+    }
+  }
+
+  // Login History Storage
+  static Future<void> recordLogin() async {
+    final prefs = await SharedPreferences.getInstance();
+    List<String> history = await getLoginHistory();
+    String now = DateTime.now().toIso8601String();
+    history.insert(0, now);
+    // Keep only last 10 logins
+    if (history.length > 10) {
+      history = history.sublist(0, 10);
+    }
+    await prefs.setStringList(keyLoginHistory, history);
+  }
+
+  static Future<List<String>> getLoginHistory() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getStringList(keyLoginHistory) ?? [];
+  }
+
+  static Future<void> saveActiveMeter(String? number) async {
+    final prefs = await SharedPreferences.getInstance();
+    final security = SecurityService();
+    if (number == null) {
+      await prefs.remove(keyActiveMeter);
+    } else {
+      await prefs.setString(keyActiveMeter, security.encryptData(number));
+    }
+  }
+
+  static Future<String?> getActiveMeter() async {
+    final prefs = await SharedPreferences.getInstance();
+    final security = SecurityService();
+    final encrypted = prefs.getString(keyActiveMeter);
+    return encrypted != null ? security.decryptData(encrypted) : null;
+  }
+
+  static bool _isInitialized = false;
+
+  static Future<void> init() async {
+    if (_isInitialized) return;
+    _isInitialized = true;
+    await SharedPreferences.getInstance();
+  }
+
+  static Future<void> clearAll() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.clear();
+  }
+}
