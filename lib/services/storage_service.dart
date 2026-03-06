@@ -68,7 +68,7 @@ class StorageService {
 
   static Future<bool> getTheme() async {
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getBool(keyTheme) ?? false;
+    return prefs.getBool(keyTheme) ?? true; // default to dark on first launch
   }
 
   // ── Profile image helpers ──────────────────────────────────────────────────
