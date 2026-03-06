@@ -10,6 +10,10 @@ class StorageService {
   static const String keyTransactions = 'user_transactions';
   static const String keyLoginHistory = 'login_history';
   static const String keyActiveMeter = 'active_meter';
+  static const String keyTheme = 'app_theme_dark';
+  static const String keyProfileImage = 'profile_image_path';
+  static const String keyHasEverRegistered = 'has_ever_registered';
+  static const String keyUserEmail = 'user_email';
 
   static Future<void> saveBalance(double balance) async {
     final prefs = await SharedPreferences.getInstance();
@@ -30,11 +34,16 @@ class StorageService {
     }
   }
 
-  static Future<void> saveUserData(String name, String phone) async {
+  static Future<void> saveUserData(String name, String phone, {String email = ''}) async {
     final prefs = await SharedPreferences.getInstance();
     final security = SecurityService();
     await prefs.setString(keyUserName, security.encryptData(name));
     await prefs.setString(keyUserPhone, security.encryptData(phone));
+    if (email.isNotEmpty) {
+      await prefs.setString(keyUserEmail, security.encryptData(email));
+    }
+    // Mark that an account has ever been created on this device
+    await prefs.setBool(keyHasEverRegistered, true);
   }
 
   static Future<Map<String, String>> getUserData() async {
@@ -42,11 +51,42 @@ class StorageService {
     final security = SecurityService();
     final encryptedName = prefs.getString(keyUserName);
     final encryptedPhone = prefs.getString(keyUserPhone);
+    final encryptedEmail = prefs.getString(keyUserEmail);
     
     return {
       'name': encryptedName != null ? security.decryptData(encryptedName) : 'User',
       'phone': encryptedPhone != null ? security.decryptData(encryptedPhone) : '',
+      'email': encryptedEmail != null ? security.decryptData(encryptedEmail) : '',
     };
+  }
+
+  // ── Theme helpers ──────────────────────────────────────────────────────────
+  static Future<void> saveTheme(bool isDark) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(keyTheme, isDark);
+  }
+
+  static Future<bool> getTheme() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(keyTheme) ?? false;
+  }
+
+  // ── Profile image helpers ──────────────────────────────────────────────────
+  static Future<void> saveProfileImage(String path) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(keyProfileImage, path);
+  }
+
+  static Future<String?> getProfileImage() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(keyProfileImage);
+  }
+
+  // ── Registration flag ──────────────────────────────────────────────────────
+  /// Returns true if the user has EVER completed signup on any install of this app.
+  static Future<bool> hasEverRegistered() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(keyHasEverRegistered) ?? false;
   }
 
   // Transaction Storage

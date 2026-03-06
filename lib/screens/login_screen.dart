@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../widgets/custom_text_field.dart';
+import '../screens/signup_screen.dart';
 import '../screens/dashboard_screen.dart';
 import '../theme/app_theme.dart';
 import '../services/storage_service.dart';
@@ -11,13 +12,19 @@ class LoginScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final phoneController = TextEditingController();
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    final bgGradient = isDark
+        ? [AppTheme.darkBackground, AppTheme.darkSurface]
+        : [AppTheme.backgroundColor, Colors.white];
 
     return Scaffold(
       body: Container(
         height: MediaQuery.of(context).size.height,
         decoration: BoxDecoration(
           gradient: LinearGradient(
-            colors: [AppTheme.backgroundColor, Colors.white],
+            colors: bgGradient,
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
           ),
@@ -36,24 +43,25 @@ class LoginScreen extends StatelessWidget {
                       color: AppTheme.primaryColor.withValues(alpha: 0.1),
                       shape: BoxShape.circle,
                     ),
-                    child: const Icon(Icons.lock_person_rounded, size: 48, color: AppTheme.primaryColor),
+                    child: const Icon(Icons.lock_person_rounded,
+                        size: 48, color: AppTheme.primaryColor),
                   ),
                 ),
                 const SizedBox(height: 40),
-                const Text(
+                Text(
                   "Welcome Back",
-                  style: TextStyle(
-                    fontSize: 34,
+                  style: theme.textTheme.headlineMedium?.copyWith(
                     fontWeight: FontWeight.bold,
-                    color: AppTheme.textColor,
                     letterSpacing: -1,
                   ),
                 ),
-                const Text(
-                  "Login to continue your smart energy journey.",
-                  style: TextStyle(
-                    fontSize: 16,
-                    color: AppTheme.subTextColor,
+                const SizedBox(height: 6),
+                Text(
+                  "Sign in to continue your smart energy journey.",
+                  style: theme.textTheme.bodyLarge?.copyWith(
+                    color: isDark
+                        ? AppTheme.darkSubText
+                        : AppTheme.subTextColor,
                     height: 1.5,
                   ),
                 ),
@@ -72,12 +80,14 @@ class LoginScreen extends StatelessWidget {
                       if (context.mounted) {
                         Navigator.pushReplacement(
                           context,
-                          MaterialPageRoute(builder: (context) => const DashboardScreen()),
+                          MaterialPageRoute(
+                              builder: (_) => const DashboardScreen()),
                         );
                       }
                     } else {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text("Please enter your phone number")),
+                        const SnackBar(
+                            content: Text("Please enter your phone number")),
                       );
                     }
                   },
@@ -91,24 +101,29 @@ class LoginScreen extends StatelessWidget {
                 Center(
                   child: IconButton(
                     onPressed: () async {
-                      final success = await SecurityService().authenticateWithBiometrics();
+                      final success =
+                          await SecurityService().authenticateWithBiometrics();
                       if (success) {
                         await StorageService.recordLogin();
                         if (context.mounted) {
                           Navigator.pushReplacement(
                             context,
-                            MaterialPageRoute(builder: (context) => const DashboardScreen()),
+                            MaterialPageRoute(
+                                builder: (_) => const DashboardScreen()),
                           );
                         }
                       } else {
                         if (context.mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text("Biometric authentication failed")),
+                            const SnackBar(
+                                content:
+                                    Text("Biometric authentication failed")),
                           );
                         }
                       }
                     },
-                    icon: const Icon(Icons.fingerprint_rounded, size: 48, color: AppTheme.primaryColor),
+                    icon: const Icon(Icons.fingerprint_rounded,
+                        size: 48, color: AppTheme.primaryColor),
                     tooltip: "Login with Biometrics",
                   ),
                 ),
@@ -116,11 +131,20 @@ class LoginScreen extends StatelessWidget {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Text("Don't have an account? ", style: TextStyle(color: AppTheme.subTextColor)),
+                    Text(
+                      "Don't have an account? ",
+                      style: TextStyle(
+                        color: isDark
+                            ? AppTheme.darkSubText
+                            : AppTheme.subTextColor,
+                      ),
+                    ),
                     GestureDetector(
-                      onTap: () {
-                        Navigator.pop(context);
-                      },
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (_) => const SignUpScreen()),
+                      ),
                       child: const Text(
                         "Sign Up",
                         style: TextStyle(

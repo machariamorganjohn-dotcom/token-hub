@@ -9,7 +9,8 @@ class SplashScreen extends StatefulWidget {
   State<SplashScreen> createState() => _SplashScreenState();
 }
 
-class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderStateMixin {
+class _SplashScreenState extends State<SplashScreen>
+    with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   late Animation<double> _fadeAnimation;
   late Animation<double> _scaleAnimation;
@@ -28,10 +29,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
     );
 
     _scaleAnimation = Tween<double>(begin: 0.8, end: 1.0).animate(
-      CurvedAnimation(
-        parent: _controller,
-        curve: Curves.elasticOut,
-      ),
+      CurvedAnimation(parent: _controller, curve: Curves.elasticOut),
     );
 
     _controller.forward();
@@ -39,10 +37,20 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
     Future.delayed(const Duration(seconds: 3), () async {
       await StorageService.init();
       final userData = await StorageService.getUserData();
-      final hasUser = userData['phone']?.isNotEmpty ?? false;
+      final hasPhone = userData['phone']?.isNotEmpty ?? false;
+      final hasEverRegistered = await StorageService.hasEverRegistered();
 
-      if (mounted) {
-        Navigator.pushReplacementNamed(context, hasUser ? '/dashboard' : '/login');
+      if (!mounted) return;
+
+      if (hasPhone) {
+        // Active session — go straight to the app
+        Navigator.pushReplacementNamed(context, '/dashboard');
+      } else if (hasEverRegistered) {
+        // Was registered before but reinstalled (data wiped) — show login
+        Navigator.pushReplacementNamed(context, '/login');
+      } else {
+        // Brand new user — go to signup
+        Navigator.pushReplacementNamed(context, '/signup');
       }
     });
   }
