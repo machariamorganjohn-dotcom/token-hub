@@ -1,5 +1,7 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../widgets/custom_text_field.dart';
 import '../theme/app_theme.dart';
 import '../services/storage_service.dart';
@@ -392,8 +394,22 @@ class _BuyTokenScreenState extends State<BuyTokenScreen> {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Enter a meter number")));
       return;
     }
+    if (meterController.text.length != 11) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Meter number must be exactly 11 digits")));
+      return;
+    }
 
     _paymentService.processPayment(method: _selectedMethod, amount: amount);
+  }
+
+  String _generateFakeToken() {
+    final random = math.Random();
+    String t = "";
+    for (int i = 0; i < 20; i++) {
+      t += random.nextInt(10).toString();
+      if ((i + 1) % 4 == 0 && i != 19) t += "-";
+    }
+    return t;
   }
 
   Future<void> _handlePaymentSuccess({bool isSimulation = false}) async {
@@ -407,12 +423,15 @@ class _BuyTokenScreenState extends State<BuyTokenScreen> {
     final now = DateTime.now();
     final dateStr = "${now.day} ${_getMonth(now.month)}, ${now.hour}:${now.minute.toString().padLeft(2, '0')}";
     
+    final token = _generateFakeToken();
+
     await StorageService.saveTransaction({
       'title': isSimulation ? 'Token Purchase (SIMULATED)' : 'Token Purchase (${_selectedMethod.name.toUpperCase()})',
       'date': dateStr,
       'amount': 'KES ${amount.toStringAsFixed(0)}',
       'units': '${newUnits.toStringAsFixed(2)} Units',
       'meter': meterController.text,
+      'token': token,
       'isSuccess': 'true',
     });
 
@@ -420,12 +439,12 @@ class _BuyTokenScreenState extends State<BuyTokenScreen> {
     SmartMeterService().notifyBalanceChanged();
     NotificationService().notify(AppNotification(
       title: isSimulation ? "Simulation: Success" : "Payment Successful",
-      message: "KES ${amount.toStringAsFixed(0)} tokens added to meter ${meterController.text}",
+      message: "KES ${amount.toStringAsFixed(0)} added. Token: $token",
       type: NotificationType.paymentSuccess,
     ));
 
     if (mounted) {
-      _showSuccessDialog(context, amount.toStringAsFixed(0), newUnits.toStringAsFixed(2), dateStr, isSimulation: isSimulation);
+      _showSuccessDialog(context, amount.toStringAsFixed(0), newUnits.toStringAsFixed(2), dateStr, token, isSimulation: isSimulation);
     }
   }
 
@@ -443,7 +462,7 @@ class _BuyTokenScreenState extends State<BuyTokenScreen> {
     return months[month - 1];
   }
 
-  void _showSuccessDialog(BuildContext context, String amount, String units, String time, {bool isSimulation = false}) {
+  void _showSuccessDialog(BuildContext context, String amount, String units, String time, String token, {bool isSimulation = false}) {
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -475,10 +494,38 @@ class _BuyTokenScreenState extends State<BuyTokenScreen> {
                     child: Column(
                       children: [
                         _receiptRow("Amount Paid", "KES $amount"),
-                        const Divider(height: 24),
+                        const Divider(height: 16),
                         _receiptRow("Units Added", "$units Units"),
-                        const Divider(height: 24),
+                        const Divider(height: 16),
                         _receiptRow("Timestamp", time),
+                        const Divider(height: 16),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text("Electricity Token", style: TextStyle(color: AppTheme.subTextColor, fontSize: 13)),
+                            const SizedBox(height: 8),
+                            Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: AppTheme.primaryColor.withValues(alpha: 0.1),
+                                borderRadius: BorderRadius.circular(8)
+                              ),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Text(token, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, letterSpacing: 1.2)),
+                                  GestureDetector(
+                                    onTap: () {
+                                      Clipboard.setData(ClipboardData(text: token.replaceAll('-', '')));
+                                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Token copied to clipboard")));
+                                    },
+                                    child: const Icon(Icons.copy_rounded, color: AppTheme.primaryColor, size: 20),
+                                  )
+                                ],
+                              ),
+                            )
+                          ],
+                        )
                       ],
                     ),
                   ),

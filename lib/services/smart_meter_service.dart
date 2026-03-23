@@ -1,8 +1,9 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'storage_service.dart';
-import 'security_service.dart';
+import 'api_service.dart';
 
 enum MeterConnectionStatus { disconnected, connecting, connected, remote }
 
@@ -51,11 +52,10 @@ class SmartMeterService {
   Future<void> init() async {
     if (_isInitialized) return;
     _isInitialized = true;
-    // Simulate periodic network check
-    Timer.periodic(const Duration(seconds: 10), (timer) {
-      _isOnline = _random.nextDouble() > 0.05; // 95% up-time simulation
-      _networkController.add(_isOnline);
-    });
+    
+    // Check initial connectivity
+    _isOnline = true; // assume online for backend demo
+    _networkController.add(_isOnline);
 
     final activeMeter = await StorageService.getActiveMeter();
     if (activeMeter != null) {
@@ -64,15 +64,11 @@ class SmartMeterService {
   }
 
   Future<void> connect(String meterNumber, {bool notify = true}) async {
-    if (!_isOnline) {
-      throw Exception("No internet connection available (WiFi/Mobile Data required)");
-    }
-
     _currentStatus = MeterConnectionStatus.connecting;
     _statusController.add(_currentStatus);
 
-    // Simulate high-end remote handshake (Cloud IoT)
-    await Future.delayed(const Duration(seconds: 3));
+    // Simulate handshakes with backend/IoT
+    await Future.delayed(const Duration(seconds: 2));
 
     _currentStatus = MeterConnectionStatus.remote;
     _connectedMeterNumber = meterNumber;
@@ -133,13 +129,47 @@ class SmartMeterService {
   }
 
   Future<double> syncBalance() async {
-    if (!_isOnline) throw Exception("Network required for remote sync");
-    
-    // Remote fetch via "Greater Distance" IoT endpoint
-    await Future.delayed(const Duration(seconds: 2));
+    try {
+      final userId = await StorageService.getUserId();
+      if (userId == null) return await StorageService.getBalance();
+
+      final response = await ApiService.syncBalance(userId);
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final double newBalance = (data['balance'] ?? 0).toDouble();
+        await StorageService.saveBalance(newBalance);
+        _emitCurrentData(newBalance);
+        return newBalance;
+      }
+    } catch (e) {
+      // fallback to local if offline
+    }
     final balance = await StorageService.getBalance();
     _emitCurrentData(balance);
     return balance;
+  }
+
+  /// Syncs meters from the backend and updates local storage
+  Future<List<Map<String, String>>> syncMetersFromBackend() async {
+    try {
+      final response = await ApiService.getMeters();
+      if (response.statusCode == 200) {
+        final List<dynamic> data = jsonDecode(response.body);
+        final meters = data.map((m) => {
+          'name': m['name'].toString(),
+          'number': m['number'].toString(),
+        }).toList();
+        
+        // Update local storage too for fallback/cache
+        for (var m in meters) {
+          await StorageService.saveMeter(m['name']!, m['number']!);
+        }
+        return meters;
+      }
+    } catch (e) {
+      // fallback to local
+    }
+    return await StorageService.getMeters();
   }
 
   Future<void> notifyBalanceChanged() async {
@@ -150,17 +180,11 @@ class SmartMeterService {
   }
 
   void _emitCurrentData(double balance) {
-    final security = SecurityService();
-    final packetId = security.generateSecurePacketId();
-    
-    // Simulate secure tunnel validation
-    if (security.verifySecureTunnel(packetId)) {
-      _dataController.add(MeterData(
-        currentUnits: balance,
-        voltage: 230.0 + (_random.nextDouble() * 10 - 5),
-        load: 0.5 + _random.nextDouble() * 2.0,
-        timestamp: DateTime.now().toIso8601String(),
-      ));
-    }
+    _dataController.add(MeterData(
+      currentUnits: balance,
+      voltage: 230.0 + (_random.nextDouble() * 10 - 5),
+      load: 0.5 + _random.nextDouble() * 2.0,
+      timestamp: DateTime.now().toIso8601String(),
+    ));
   }
 }

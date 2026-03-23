@@ -1,5 +1,7 @@
 import 'dart:async';
-import 'dart:math';
+import 'dart:convert';
+import 'api_service.dart';
+import 'storage_service.dart';
 
 enum PaymentMethod { mpesa, card, bank }
 enum PaymentStatus { idle, pending, success, failed }
@@ -12,7 +14,7 @@ class PaymentService {
   final _paymentStatusController = StreamController<PaymentStatus>.broadcast();
   Stream<PaymentStatus> get paymentStatusStream => _paymentStatusController.stream;
 
-  /// Initiates a payment simulation for the selected platform.
+  /// Initiates a payment via the backend API.
   Future<void> processPayment({
     required PaymentMethod method,
     required double amount,
@@ -20,29 +22,31 @@ class PaymentService {
   }) async {
     _paymentStatusController.add(PaymentStatus.pending);
     
-    // Simulate gateway handshakes
-    await Future.delayed(const Duration(seconds: 2));
-    
-    // Simulate user interaction (PIN entry, Card OTP, etc.)
-    _simulateGatewayResponse(method);
-  }
+    // For now, we only handle M-Pesa backend integration
+    if (method == PaymentMethod.mpesa) {
+      try {
+        final userData = await StorageService.getUserData();
+        final meterNumber = details?['meterNumber'] ?? '';
+        final phone = userData['phone'] ?? '';
 
-  void _simulateGatewayResponse(PaymentMethod method) async {
-    final random = Random();
-    
-    // Simulate specific platform behavior
-    int delaySeconds = 3;
-    if (method == PaymentMethod.mpesa) delaySeconds = 8; // M-Pesa PIN takes longer
-    
-    await Future.delayed(Duration(seconds: delaySeconds));
-    
-    // 95% success rate for high-end simulation
-    final isSuccess = random.nextDouble() > 0.05;
-    
-    if (isSuccess) {
-      _paymentStatusController.add(PaymentStatus.success);
+        final response = await ApiService.initiateStkPush(amount, meterNumber, phone);
+        
+        if (response.statusCode == 200) {
+          final data = jsonDecode(response.body);
+          // The backend returns a transaction and new balance
+          await StorageService.saveBalance((data['newBalance'] ?? 0).toDouble());
+          
+          _paymentStatusController.add(PaymentStatus.success);
+        } else {
+          _paymentStatusController.add(PaymentStatus.failed);
+        }
+      } catch (e) {
+        _paymentStatusController.add(PaymentStatus.failed);
+      }
     } else {
-      _paymentStatusController.add(PaymentStatus.failed);
+      // Mock for others
+      await Future.delayed(const Duration(seconds: 3));
+      _paymentStatusController.add(PaymentStatus.success);
     }
   }
 

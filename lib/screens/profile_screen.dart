@@ -6,6 +6,9 @@ import '../theme/app_theme.dart';
 import '../services/storage_service.dart';
 import '../services/security_service.dart';
 import '../providers/theme_provider.dart';
+import 'referral_screen.dart';
+import 'agent_dashboard_screen.dart';
+import 'login_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -161,6 +164,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
       appBar: AppBar(
         title: const Text("My Profile"),
         backgroundColor: Colors.transparent,
+        elevation: 0,
+        leading: BackButton(color: isDark ? Colors.white : Colors.black),
       ),
       body: Container(
         decoration: BoxDecoration(
@@ -362,6 +367,36 @@ class _ProfileScreenState extends State<ProfileScreen> {
             _notificationsEnabled,
             (val) => setState(() => _notificationsEnabled = val),
           ),
+          const Divider(height: 1),
+          ListTile(
+            leading: Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.amber.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Icon(Icons.group_add_rounded, color: Colors.amber, size: 20),
+            ),
+            title: const Text("Refer & Earn", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+            subtitle: const Text("Invite friends, get free units", style: TextStyle(color: AppTheme.subTextColor, fontSize: 12)),
+            trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 16, color: AppTheme.subTextColor),
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ReferralScreen())),
+          ),
+          const Divider(height: 1),
+          ListTile(
+            leading: Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.purple.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Icon(Icons.storefront_rounded, color: Colors.purple, size: 20),
+            ),
+            title: const Text("Agent Dashboard", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+            subtitle: const Text("Manage bulk operations", style: TextStyle(color: AppTheme.subTextColor, fontSize: 12)),
+            trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 16, color: AppTheme.subTextColor),
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AgentDashboardScreen())),
+          ),
         ],
       ),
     );
@@ -401,7 +436,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Widget _buildLogoutButton() {
     return TextButton.icon(
       onPressed: () {
-        Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (context) => const LoginScreen()),
+          (route) => false,
+        );
       },
       icon: const Icon(Icons.logout_rounded, color: AppTheme.errorColor),
       label: const Text("Sign Out",

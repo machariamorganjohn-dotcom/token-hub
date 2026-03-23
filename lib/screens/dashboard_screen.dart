@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../widgets/transaction_tile.dart';
@@ -10,7 +11,11 @@ import 'support_screen.dart';
 import '../services/smart_meter_service.dart';
 import '../services/security_service.dart';
 import '../services/notification_service.dart';
+import '../services/api_service.dart';
 import 'dart:async';
+import 'dart:math' as math;
+import '../services/network_service.dart';
+import 'package:flutter/services.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -37,11 +42,15 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
   StreamSubscription? _networkSubscription;
   StreamSubscription? _notificationSubscription;
   StreamSubscription? _refreshSubscription;
+  Timer? _consumptionTimer;
 
   @override
   void initState() {
     super.initState();
     SecurityService().performIntegrityCheck(); // Trigger security audit
+    NetworkService().checkConnectivity().then((online) {
+      if (mounted) setState(() => _isOnline = online);
+    });
     _pulseController = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 2),
@@ -49,6 +58,20 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
     _loadData();
     _initMeterService();
     _setupNotifications();
+    _startConsumptionSimulation();
+  }
+
+  void _startConsumptionSimulation() {
+    // Simulate real meter behavior: reduce units slightly over time
+    // Roughly 0.01 units every 5 minutes for simulation
+    _consumptionTimer = Timer.periodic(const Duration(minutes: 5), (timer) {
+      if (mounted && _balance > 0.01) {
+        setState(() {
+          _balance -= 0.01;
+        });
+        StorageService.saveBalance(_balance);
+      }
+    });
   }
 
   void _setupNotifications() {
@@ -95,6 +118,7 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
     _networkSubscription?.cancel();
     _notificationSubscription?.cancel();
     _refreshSubscription?.cancel();
+    _consumptionTimer?.cancel();
     super.dispose();
   }
 
@@ -130,11 +154,36 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
 
   Future<void> _loadData() async {
     final userData = await StorageService.getUserData();
-    final balance = await StorageService.getBalance();
-    final meters = await StorageService.getMeters();
-    final transactions = await StorageService.getTransactions();
     final history = await StorageService.getLoginHistory();
     
+    // Deterministic Sync: Fetch accurate balance from backend (accounts for consumption while app was closed)
+    final balance = await _smartMeterService.syncBalance();
+    
+    // Sync meters from backend
+    final meters = await _smartMeterService.syncMetersFromBackend();
+    
+    // Sync transactions from backend
+    List<Map<String, String>> transactions = [];
+    try {
+      final response = await ApiService.getTransactions();
+      if (response.statusCode == 200) {
+        final List<dynamic> data = jsonDecode(response.body);
+        transactions = data.map((t) => {
+          'title': t['title'].toString(),
+          'date': t['timestamp'].toString(),
+          'amount': 'KES ${t['amount']}',
+          'units': '${t['unitsReceived']} Units',
+          'meter': t['meterNumber'].toString(),
+          'token': t['tokenPayload'].toString(),
+          'isSuccess': t['isSuccess'].toString(),
+        }).toList();
+      } else {
+        transactions = await StorageService.getTransactions();
+      }
+    } catch (e) {
+      transactions = await StorageService.getTransactions();
+    }
+
     String lastLoginText = "";
     if (history.isNotEmpty) {
       final lastLoginDate = DateTime.parse(history.first);
@@ -150,6 +199,41 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
         _lastLogin = lastLoginText;
         _isLoading = false;
       });
+      _checkSmartReminders();
+    }
+  }
+
+  void _checkSmartReminders() {
+    if (_balance < 4.0 && _meters.isNotEmpty) {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const Row(
+            children: [
+              Icon(Icons.warning_amber_rounded, color: Colors.redAccent, size: 28),
+              SizedBox(width: 8),
+              Text("Low Balance Alert"),
+            ],
+          ),
+          content: Text("You have less than 4 Units remaining (${_balance.toStringAsFixed(2)} Units). Please recharge to avoid disconnection."),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text("Dismiss", style: TextStyle(color: AppTheme.subTextColor)),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(context);
+                Navigator.push(context, MaterialPageRoute(builder: (context) => const BuyTokenScreen()));
+              },
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent, foregroundColor: Colors.white),
+              child: const Text("BUY NOW"),
+            ),
+          ],
+        )
+      );
     }
   }
 
@@ -353,14 +437,35 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
                         ),
                       ),
                     ),
-                  const Text(
-                    "Token Hub Premium",
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 26,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: -0.5,
-                    ),
+                  Row(
+                    children: [
+                      const Text(
+                        "Token Hub Premium",
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 26,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: -0.5,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: Colors.amber.withValues(alpha: 0.2),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.amber.withValues(alpha: 0.5)),
+                        ),
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.stars_rounded, color: Colors.amber, size: 12),
+                            SizedBox(width: 4),
+                            Text("1,250 Pts", style: TextStyle(color: Colors.amber, fontSize: 10, fontWeight: FontWeight.bold)),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -392,44 +497,116 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
   }
 
   Widget _buildBalanceCard() {
+    // Format balance into segments like a physical meter
+    String balanceStr = _balance.toStringAsFixed(2);
+    List<String> segments = balanceStr.split('.');
+    String whole = segments[0].padLeft(4, '0');
+    String decimal = segments[1];
+
     return Container(
+      width: double.infinity,
       padding: const EdgeInsets.all(28),
-      decoration: AppTheme.glassBoxDecoration(color: Colors.white),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      decoration: BoxDecoration(
+        color: Colors.black.withOpacity(0.4),
+        borderRadius: BorderRadius.circular(32),
+        border: Border.all(color: Colors.white10),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.5),
+            blurRadius: 20,
+            offset: const Offset(0, 10),
+          )
+        ],
+      ),
+      child: Column(
         children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               const Text(
-                "Available Balance",
-                style: TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.w500),
+                "DIGITAL ENERGY METER",
+                style: TextStyle(
+                  color: Colors.greenAccent,
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 2,
+                ),
               ),
-              const SizedBox(height: 8),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.baseline,
-                textBaseline: TextBaseline.alphabetic,
-                children: [
-                  Text(
-                    _balance.toStringAsFixed(2),
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 36,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(width: 6),
-                  const Text(
-                    "Units",
-                    style: TextStyle(color: Colors.white70, fontSize: 16),
-                  ),
-                ],
+              _buildLivePulseIndicator(),
+            ],
+          ),
+          const SizedBox(height: 24),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.baseline,
+            textBaseline: TextBaseline.alphabetic,
+            children: [
+              _buildMeterSegment(whole),
+              const Text(".", style: TextStyle(color: Colors.amber, fontSize: 40, fontWeight: FontWeight.bold)),
+              _buildMeterSegment(decimal, isDecimal: true),
+              const SizedBox(width: 12),
+              const Text(
+                "kWh",
+                style: TextStyle(color: Colors.white38, fontSize: 16, fontWeight: FontWeight.bold),
               ),
             ],
           ),
-          _buildSyncButton(),
+          const SizedBox(height: 16),
+          _buildSyncStatus(),
         ],
       ),
+    );
+  }
+
+  Widget _buildMeterSegment(String text, {bool isDecimal = false}) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: Colors.black,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.white12),
+      ),
+      child: Text(
+        text,
+        style: TextStyle(
+          color: isDecimal ? Colors.redAccent : Colors.amber,
+          fontSize: 44,
+          fontWeight: FontWeight.bold,
+          fontFamily: 'Courier',
+          letterSpacing: 4,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLivePulseIndicator() {
+    return Row(
+      children: [
+        FadeTransition(
+          opacity: _pulseController,
+          child: Container(
+            width: 8,
+            height: 8,
+            decoration: const BoxDecoration(color: Colors.redAccent, shape: BoxShape.circle),
+          ),
+        ),
+        const SizedBox(width: 8),
+        const Text("LIVE", style: TextStyle(color: Colors.white38, fontSize: 10, fontWeight: FontWeight.bold)),
+      ],
+    );
+  }
+
+  Widget _buildSyncStatus() {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        const Icon(Icons.history, color: Colors.white24, size: 12),
+        const SizedBox(width: 6),
+        Text(
+          "Last synced with KPLC: ${DateTime.now().hour}:${DateTime.now().minute.toString().padLeft(2, '0')}",
+          style: const TextStyle(color: Colors.white24, fontSize: 10),
+        ),
+      ],
     );
   }
 
@@ -518,6 +695,44 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
             ),
           ],
         ),
+        const SizedBox(height: 24),
+        if (_meters.isNotEmpty) _buildSmartFeatures(),
+      ],
+    );
+  }
+
+  Widget _buildSmartFeatures() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          "Smart Power",
+          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppTheme.textColor),
+        ),
+        const SizedBox(height: 16),
+        Row(
+          children: [
+            Expanded(
+              child: _buildActionCard(
+                "One-Tap Buy",
+                Icons.touch_app_rounded,
+                Colors.blue,
+                () => _showOneTapBuyDialog(),
+                isVertical: false,
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: _buildActionCard(
+                "SOS KSh 150",
+                Icons.health_and_safety_rounded,
+                Colors.redAccent,
+                () => _handleEmergencyToken(),
+                isVertical: false,
+              ),
+            ),
+          ],
+        ),
       ],
     );
   }
@@ -571,10 +786,10 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
     );
   }
 
-  Widget _buildActionCard(String title, IconData icon, Color color, VoidCallback onTap) {
+  Widget _buildActionCard(String title, IconData icon, Color color, VoidCallback onTap, {bool isVertical = true}) {
     return GestureDetector(
       onTap: onTap,
-      child: Column(
+      child: isVertical ? Column(
         children: [
           Container(
             padding: const EdgeInsets.all(20),
@@ -594,6 +809,21 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
             ),
           ),
         ],
+      ) : Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+           color: color.withValues(alpha: 0.1),
+           borderRadius: BorderRadius.circular(16),
+           border: Border.all(color: color.withValues(alpha: 0.2)),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, color: color, size: 20),
+            const SizedBox(width: 8),
+            Text(title, style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 13)),
+          ],
+        ),
       ),
     );
   }
@@ -618,6 +848,7 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
           date: tx['date'] ?? "",
           amount: tx['amount'] ?? "",
           isSuccess: tx['isSuccess'] == 'true',
+          token: tx['token'],
         );
       },
     );
@@ -769,5 +1000,247 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
               ),
       ),
     );
+  }
+
+  // ── Smart Feature Handlers ────────────────────────────────────────────────
+  void _showOneTapBuyDialog() {
+    String selectedMeter = _meters.isNotEmpty ? _meters.first['number']! : "No Meter Found";
+    final amtController = TextEditingController(text: "500");
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+              title: const Text("One-Tap Token", style: TextStyle(fontWeight: FontWeight.bold)),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text("Buy tokens instantly via M-Pesa. Select your target meter below:", style: TextStyle(color: AppTheme.subTextColor, fontSize: 13)),
+                  const SizedBox(height: 16),
+                  if (_meters.isNotEmpty)
+                    DropdownButtonFormField<String>(
+                      value: selectedMeter,
+                      decoration: InputDecoration(
+                        labelText: "Select Meter",
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      ),
+                      items: _meters.map((m) => DropdownMenuItem(
+                        value: m['number']!,
+                        child: Text("${m['name']} (${m['number']})", style: const TextStyle(fontSize: 14)),
+                      )).toList(),
+                      onChanged: (val) {
+                        if (val != null) {
+                          setDialogState(() => selectedMeter = val);
+                        }
+                      },
+                    ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: amtController,
+                    keyboardType: TextInputType.number,
+                    decoration: InputDecoration(
+                      labelText: "Amount (KES)",
+                      prefixIcon: const Icon(Icons.payments_rounded, color: AppTheme.primaryColor),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+                    ),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel")),
+                ElevatedButton.icon(
+                  onPressed: () {
+                    final amt = double.tryParse(amtController.text) ?? 0;
+                    if (amt >= 50) {
+                      Navigator.pop(context);
+                      _processFastPurchase(amt, selectedMeter);
+                    } else {
+                       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Minimum KES 50 required")));
+                    }
+                  },
+                  icon: const Icon(Icons.bolt_rounded),
+                  label: const Text("Buy Now"),
+                ),
+              ],
+            );
+          }
+        );
+      },
+    );
+  }
+
+  Future<void> _processFastPurchase(double amount, String targetMeter) async {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const AlertDialog(
+        content: Row(
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(width: 16),
+            Text("Processing M-Pesa STK..."),
+          ],
+        ),
+      )
+    );
+    
+    try {
+      final userData = await StorageService.getUserData();
+      final response = await ApiService.initiateStkPush(amount, targetMeter, userData['phone'] ?? '');
+      final data = jsonDecode(response.body);
+
+      if (!mounted) return;
+      Navigator.pop(context); // close loading arg
+
+      if (response.statusCode == 200) {
+         final tx = data['transaction'];
+         final token = tx['tokenPayload'];
+         final newBalance = (data['newBalance'] ?? 0).toDouble();
+         final debtDeducted = (data['debtDeducted'] ?? 0).toDouble();
+
+         await StorageService.saveBalance(newBalance);
+         
+         if (debtDeducted > 0) {
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+              content: Text("Emergency Debt of KES $debtDeducted automatically deducted."),
+              backgroundColor: Colors.orange,
+            ));
+         }
+
+         _loadData();
+         _showTokenDialog(token, tx['unitsReceived'].toString(), amount.toStringAsFixed(0));
+      } else {
+         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(data['message'] ?? "Purchase failed")));
+      }
+    } catch (e) {
+      if (mounted) Navigator.pop(context);
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Purchase failed. Server connection error.")));
+    }
+  }
+
+  void _showTokenDialog(String token, String units, String paid) {
+     showDialog(
+       context: context, 
+       builder: (_) => AlertDialog(
+         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+         title: const Row(
+            children: [
+              Icon(Icons.check_circle_rounded, color: Colors.green),
+              SizedBox(width: 8),
+              Text("Success", style: TextStyle(fontWeight: FontWeight.bold)),
+            ],
+         ),
+         content: Column(
+           mainAxisSize: MainAxisSize.min,
+           crossAxisAlignment: CrossAxisAlignment.start,
+           children: [
+             Text("You purchased $units Units for KES $paid."),
+             const SizedBox(height: 16),
+             Container(
+               padding: const EdgeInsets.all(12),
+               decoration: BoxDecoration(color: AppTheme.primaryColor.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
+               child: Row(
+                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                 children: [
+                   Text(token, style: const TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1.2)),
+                   GestureDetector(
+                     onTap: () {
+                         Clipboard.setData(ClipboardData(text: token.replaceAll('-', '')));
+                         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Copied!")));
+                     },
+                     child: const Icon(Icons.copy_rounded, color: AppTheme.primaryColor, size: 20),
+                   )
+                 ],
+               ),
+             )
+           ],
+         ),
+         actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text("Done"))],
+       )
+     );
+  }
+
+  Future<void> _handleEmergencyToken() async {
+    final debt = await StorageService.getEmergencyDebt();
+    if (debt > 0) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text("Clear your existing emergency debt before requesting another SOS token."),
+        backgroundColor: Colors.redAccent,
+      ));
+      return;
+    }
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        title: const Text("Get Emergency Token", style: TextStyle(fontWeight: FontWeight.bold)),
+        content: const Text("You will instantly receive KES 150 worth of units. This amount will be automatically deducted from your next token purchase."),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel")),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
+            onPressed: () async {
+               Navigator.pop(context);
+               
+               showDialog(
+                  context: context,
+                  barrierDismissible: false,
+                  builder: (_) => const AlertDialog(
+                    content: Row(
+                      children: [
+                        CircularProgressIndicator(),
+                        SizedBox(width: 16),
+                        Text("Generating SOS Token..."),
+                      ],
+                    ),
+                  )
+               );
+
+               await Future.delayed(const Duration(seconds: 2)); // simulate generating token
+               final currentBalance = await StorageService.getBalance();
+               final newUnits = 150 * 0.05;
+               await StorageService.saveBalance(currentBalance + newUnits);
+               await StorageService.saveEmergencyDebt(150.0);
+
+               String token = "";
+               final random = math.Random();
+               for (int i = 0; i < 20; i++) {
+                   token += random.nextInt(10).toString();
+                   if ((i + 1) % 4 == 0 && i != 19) token += "-";
+               }
+
+               final now = DateTime.now();
+               final dateStr = "${now.day} ${_getMonth(now.month)}, ${now.hour}:${now.minute.toString().padLeft(2, '0')}";
+               await StorageService.saveTransaction({
+                 'title': 'SOS Emergency Token',
+                 'date': dateStr,
+                 'amount': 'KES 150 (Credit)',
+                 'units': '${newUnits.toStringAsFixed(2)} Units',
+                 'meter': _meters.first['number']!,
+                 'token': token,
+                 'isSuccess': 'true',
+               });
+
+               if (!context.mounted) return;
+               Navigator.pop(context); // close loader
+               _loadData();
+               _showTokenDialog(token, newUnits.toStringAsFixed(2), "150 (Credit)");
+            }, 
+            child: const Text("Get SOS Token", style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      )
+    );
+  }
+
+  String _getMonth(int month) {
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    return months[month - 1];
   }
 }

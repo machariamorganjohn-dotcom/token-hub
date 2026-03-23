@@ -5,6 +5,7 @@ class TransactionTile extends StatelessWidget {
   final String date;
   final String amount;
   final bool isSuccess;
+  final String? token;
 
   const TransactionTile({
     super.key,
@@ -12,6 +13,7 @@ class TransactionTile extends StatelessWidget {
     required this.date,
     required this.amount,
     this.isSuccess = true,
+    this.token,
   });
 
   @override
@@ -62,6 +64,26 @@ class TransactionTile extends StatelessWidget {
                     fontSize: 14,
                   ),
                 ),
+                if (token != null) ...[
+                  const SizedBox(height: 6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.green.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Text(
+                      "Token: $token",
+                      style: const TextStyle(
+                        fontFamily: 'monospace',
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.green,
+                        letterSpacing: 1.0,
+                      ),
+                    ),
+                  ),
+                ],
               ],
             ),
           ),

@@ -14,6 +14,10 @@ class StorageService {
   static const String keyProfileImage = 'profile_image_path';
   static const String keyHasEverRegistered = 'has_ever_registered';
   static const String keyUserEmail = 'user_email';
+  static const String keyEmergencyDebt = 'emergency_debt';
+  static const String keyToken = 'auth_token';
+  static const String keyUserId = 'user_id';
+  static const String keySetupDone = 'is_setup_done';
 
   static Future<void> saveBalance(double balance) async {
     final prefs = await SharedPreferences.getInstance();
@@ -31,6 +35,26 @@ class StorageService {
       return double.tryParse(decrypted) ?? 45.2;
     } catch (e) {
       return 45.2;
+    }
+  }
+
+  // ── Emergency Debt ────────────────────────────────────────────────────────
+  static Future<void> saveEmergencyDebt(double debtAmount) async {
+    final prefs = await SharedPreferences.getInstance();
+    final security = SecurityService();
+    await prefs.setString(keyEmergencyDebt, security.encryptData(debtAmount.toString()));
+  }
+
+  static Future<double> getEmergencyDebt() async {
+    final prefs = await SharedPreferences.getInstance();
+    final encrypted = prefs.getString(keyEmergencyDebt);
+    if (encrypted == null) return 0.0;
+    try {
+      final security = SecurityService();
+      final decrypted = security.decryptData(encrypted);
+      return double.tryParse(decrypted) ?? 0.0;
+    } catch (e) {
+      return 0.0;
     }
   }
 
@@ -195,5 +219,41 @@ class StorageService {
   static Future<void> clearAll() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.clear();
+  }
+
+  // ── Token & Auth Management ────────────────────────────────────────────────
+  static Future<void> saveToken(String token) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(keyToken, token);
+  }
+
+  static Future<String?> getToken() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(keyToken);
+  }
+
+  static Future<void> saveUserId(String id) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(keyUserId, id);
+  }
+
+  static Future<String?> getUserId() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(keyUserId);
+  }
+
+  static Future<bool> isAuthenticated() async {
+    final token = await getToken();
+    return token != null;
+  }
+
+  static Future<void> saveSetupDone(bool done) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(keySetupDone, done);
+  }
+
+  static Future<bool> isSetupDone() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(keySetupDone) ?? false;
   }
 }

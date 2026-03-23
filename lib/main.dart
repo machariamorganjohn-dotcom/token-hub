@@ -11,6 +11,7 @@ import 'providers/theme_provider.dart';
 import 'widgets/global_error_widget.dart';
 
 void main() {
+  WidgetsFlutterBinding.ensureInitialized();
   runApp(
     ChangeNotifierProvider(
       create: (_) => ThemeProvider(),

@@ -1,9 +1,12 @@
 import 'dart:io';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import '../theme/app_theme.dart';
 import '../services/storage_service.dart';
+import '../services/api_service.dart';
 import '../screens/dashboard_screen.dart';
+import '../screens/meter_setup_screen.dart';
 import '../screens/login_screen.dart';
 
 class SignUpScreen extends StatefulWidget {
@@ -146,24 +149,141 @@ class _SignUpScreenState extends State<SignUpScreen>
     );
   }
 
+  void _showOtpDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) {
+        final otpController = TextEditingController();
+        bool isVerifying = false;
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              title: const Text("Verify Registration", style: TextStyle(fontWeight: FontWeight.bold)),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text("Enter the code sent to your phone to finish creating your account.", style: TextStyle(fontSize: 14)),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: otpController,
+                    keyboardType: TextInputType.number,
+                    maxLength: 6,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(fontSize: 24, letterSpacing: 8, fontWeight: FontWeight.bold),
+                    decoration: InputDecoration(
+                      hintText: "000000",
+                      counterText: "",
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text("Cancel"),
+                ),
+                ElevatedButton(
+                  onPressed: isVerifying ? null : () async {
+                    if (otpController.text.length != 6) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text("Enter a 6-digit code")),
+                      );
+                      return;
+                    }
+                    setState(() => isVerifying = true);
+                    await Future.delayed(const Duration(seconds: 1)); // Simulate check
+                    if (mounted) {
+                      Navigator.pop(context);
+                      await StorageService.recordLogin();
+                      Navigator.pushReplacement(
+                        context,
+                        MaterialPageRoute(builder: (_) => const DashboardScreen()),
+                      );
+                    }
+                  },
+                  child: isVerifying 
+                    ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                    : const Text("Verify"),
+                ),
+              ],
+            );
+          }
+        );
+      }
+    );
+  }
+
   Future<void> _submit() async {
     if (!(_formKey.currentState?.validate() ?? false)) return;
+    
     setState(() => _isLoading = true);
-    await StorageService.saveUserData(
-      _nameController.text.trim(),
-      _phoneController.text.trim(),
-      email: _emailController.text.trim(),
+    
+    try {
+      final userData = {
+        'name': _nameController.text.trim(),
+        'phone': _phoneController.text.trim(),
+        'email': _emailController.text.trim(),
+        'password': _passwordController.text.trim(),
+      };
+
+      final response = await ApiService.register(userData);
+      final data = jsonDecode(response.body);
+
+      if (response.statusCode == 201) {
+        await StorageService.saveToken(data['token']);
+        await StorageService.saveUserId(data['_id']);
+        await StorageService.saveUserData(data['name'], data['phone'], email: data['email'] ?? '');
+        
+        if (_imagePath != null) {
+          await StorageService.saveProfileImage(_imagePath!);
+        }
+
+        if (mounted) {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => const MeterSetupScreen()),
+          );
+        }
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(data['message'] ?? "Registration failed")),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Connection error. Is the server running?")),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Widget _socialButton(IconData icon, String label, VoidCallback onTap, bool isDark) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+        decoration: BoxDecoration(
+          border: Border.all(color: isDark ? Colors.white24 : Colors.black12),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, size: 24, color: isDark ? Colors.white : Colors.black),
+            const SizedBox(width: 8),
+            Text(label, style: TextStyle(color: isDark ? Colors.white : Colors.black, fontWeight: FontWeight.bold)),
+          ],
+        ),
+      ),
     );
-    if (_imagePath != null) {
-      await StorageService.saveProfileImage(_imagePath!);
-    }
-    await StorageService.recordLogin();
-    if (mounted) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const DashboardScreen()),
-      );
-    }
   }
 
   // ── UI ─────────────────────────────────────────────────────────────────────
@@ -294,6 +414,26 @@ class _SignUpScreenState extends State<SignUpScreen>
                       ),
 
                       const SizedBox(height: 24),
+                      Row(
+                        children: [
+                          Expanded(child: Divider(color: isDark ? Colors.white24 : Colors.black12)),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            child: Text("OR", style: TextStyle(color: isDark ? Colors.white54 : Colors.black54)),
+                          ),
+                          Expanded(child: Divider(color: isDark ? Colors.white24 : Colors.black12)),
+                        ],
+                      ),
+                      const SizedBox(height: 24),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          _socialButton(Icons.g_mobiledata_rounded, "Google", () => _submit(), isDark),
+                          const SizedBox(width: 16),
+                          _socialButton(Icons.apple_rounded, "Apple", () => _submit(), isDark),
+                        ],
+                      ),
+                      const SizedBox(height: 32),
 
                       // ── Sign-in link ───────────────────────────────────────
                       Row(
@@ -322,6 +462,32 @@ class _SignUpScreenState extends State<SignUpScreen>
                             ),
                           ),
                         ],
+                      ),
+                      const SizedBox(height: 32),
+                      Center(
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: Colors.green.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(color: Colors.green.withValues(alpha: 0.3)),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.verified_user_rounded, color: Colors.green, size: 16),
+                              const SizedBox(width: 8),
+                              Text(
+                                "1.2M+ Active Users Nationwide",
+                                style: TextStyle(
+                                  color: isDark ? Colors.green.shade300 : Colors.green.shade700,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                       ),
                       const SizedBox(height: 16),
                     ],

@@ -4,6 +4,7 @@ import '../theme/app_theme.dart';
 
 import '../services/storage_service.dart';
 import '../services/smart_meter_service.dart';
+import '../services/api_service.dart';
 
 class AddMeterScreen extends StatefulWidget {
   const AddMeterScreen({super.key});
@@ -63,7 +64,7 @@ class _AddMeterScreenState extends State<AddMeterScreen> {
                       ),
                     ),
                     const Text(
-                      "Link aew meter to your account for real-time remote management from any distance.",
+                      "Link a new meter to your account for real-time remote management from any distance.",
                       style: TextStyle(color: AppTheme.subTextColor, fontSize: 16, height: 1.5),
                     ),
                     const SizedBox(height: 48),
@@ -134,20 +135,31 @@ class _AddMeterScreenState extends State<AddMeterScreen> {
     setState(() => _isConnecting = true);
 
     try {
-      await StorageService.saveMeter(nickName, meterNumber);
-      // Connect immediately (Remote IoT-style)
-      await SmartMeterService().connect(meterNumber);
+      final response = await ApiService.addMeter(nickName, meterNumber);
       
-      if (mounted) {
-        setState(() => _isConnecting = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text("Meter added and linked successfully!"),
-            backgroundColor: Colors.green,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-        Navigator.pop(context, true);
+      if (response.statusCode == 201) {
+        await StorageService.saveMeter(nickName, meterNumber);
+        // Connect immediately (Remote IoT-style)
+        await SmartMeterService().connect(meterNumber);
+        
+        if (mounted) {
+          setState(() => _isConnecting = false);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text("Meter added and linked successfully!"),
+              backgroundColor: Colors.green,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+          Navigator.pop(context, true);
+        }
+      } else {
+        if (mounted) {
+          setState(() => _isConnecting = false);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("Failed to add meter to backend."), backgroundColor: Colors.red),
+          );
+        }
       }
     } catch (e) {
       if (mounted) {

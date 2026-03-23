@@ -101,6 +101,7 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
                         date: tx['date'] ?? "",
                         amount: tx['amount'] ?? "",
                         isSuccess: tx['isSuccess'] == 'true',
+                        token: tx['token'],
                       ),
                     );
                   },
