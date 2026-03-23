@@ -5,7 +5,6 @@ import 'package:image_picker/image_picker.dart';
 import '../theme/app_theme.dart';
 import '../services/storage_service.dart';
 import '../services/api_service.dart';
-import '../screens/dashboard_screen.dart';
 import '../screens/meter_setup_screen.dart';
 import '../screens/login_screen.dart';
 
@@ -146,73 +145,6 @@ class _SignUpScreenState extends State<SignUpScreen>
                   fontWeight: FontWeight.w600, fontSize: 14)),
         ],
       ),
-    );
-  }
-
-  void _showOtpDialog(BuildContext context) {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) {
-        final otpController = TextEditingController();
-        bool isVerifying = false;
-        return StatefulBuilder(
-          builder: (context, setState) {
-            return AlertDialog(
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-              title: const Text("Verify Registration", style: TextStyle(fontWeight: FontWeight.bold)),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Text("Enter the code sent to your phone to finish creating your account.", style: TextStyle(fontSize: 14)),
-                  const SizedBox(height: 16),
-                  TextField(
-                    controller: otpController,
-                    keyboardType: TextInputType.number,
-                    maxLength: 6,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(fontSize: 24, letterSpacing: 8, fontWeight: FontWeight.bold),
-                    decoration: InputDecoration(
-                      hintText: "000000",
-                      counterText: "",
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
-                  ),
-                ],
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text("Cancel"),
-                ),
-                ElevatedButton(
-                  onPressed: isVerifying ? null : () async {
-                    if (otpController.text.length != 6) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text("Enter a 6-digit code")),
-                      );
-                      return;
-                    }
-                    setState(() => isVerifying = true);
-                    await Future.delayed(const Duration(seconds: 1)); // Simulate check
-                    if (mounted) {
-                      Navigator.pop(context);
-                      await StorageService.recordLogin();
-                      Navigator.pushReplacement(
-                        context,
-                        MaterialPageRoute(builder: (_) => const DashboardScreen()),
-                      );
-                    }
-                  },
-                  child: isVerifying 
-                    ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                    : const Text("Verify"),
-                ),
-              ],
-            );
-          }
-        );
-      }
     );
   }
 

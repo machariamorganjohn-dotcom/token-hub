@@ -176,7 +176,7 @@ class _MeterSetupScreenState extends State<MeterSetupScreen> {
         width: 70,
         height: 70,
         decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.05),
+          color: Colors.white.withValues(alpha: 0.05),
           shape: BoxShape.circle,
         ),
         child: Center(

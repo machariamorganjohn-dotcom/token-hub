@@ -68,13 +68,15 @@ class _LoginScreenState extends State<LoginScreen> {
                     }
                     setState(() => isVerifying = true);
                     await Future.delayed(const Duration(seconds: 1)); // Simulate check
-                    if (mounted) {
+                    if (context.mounted) {
                       Navigator.pop(context);
                       await StorageService.recordLogin();
-                      Navigator.pushReplacement(
-                        context,
-                        MaterialPageRoute(builder: (_) => const DashboardScreen()),
-                      );
+                      if (context.mounted) {
+                        Navigator.pushReplacement(
+                          context,
+                          MaterialPageRoute(builder: (_) => const DashboardScreen()),
+                        );
+                      }
                     }
                   },
                   child: isVerifying 
@@ -269,7 +271,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           await SecurityService().authenticateWithBiometrics();
                       if (success) {
                         await StorageService.recordLogin();
-                        if (mounted) {
+                        if (context.mounted) {
                           Navigator.pushReplacement(
                             context,
                             MaterialPageRoute(
@@ -277,7 +279,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           );
                         }
                       } else {
-                        if (mounted) {
+                        if (context.mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
                                 content:

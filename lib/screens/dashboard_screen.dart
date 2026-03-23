@@ -32,7 +32,6 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
   List<Map<String, String>> _transactions = [];
   String _lastLogin = "";
   bool _isLoading = true;
-  bool _isSyncing = false;
   bool _isOnline = true;
   MeterConnectionStatus _connectionStatus = MeterConnectionStatus.disconnected;
   MeterData? _liveData;
@@ -507,12 +506,12 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
       width: double.infinity,
       padding: const EdgeInsets.all(28),
       decoration: BoxDecoration(
-        color: Colors.black.withOpacity(0.4),
+        color: Colors.black.withValues(alpha: 0.4),
         borderRadius: BorderRadius.circular(32),
         border: Border.all(color: Colors.white10),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.5),
+            color: Colors.black.withValues(alpha: 0.5),
             blurRadius: 20,
             offset: const Offset(0, 10),
           )
@@ -767,7 +766,7 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
                    await _smartMeterService.connect(_meters.first['number']!);
                 } catch (e) {
                    if (!context.mounted) return;
-                   ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
+                  if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
                 }
               } else {
                 Navigator.push(context, MaterialPageRoute(builder: (context) => const AddMeterScreen()));
@@ -954,53 +953,6 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
     );
   }
 
-  Widget _buildSyncButton() {
-    final bool canSync = (_connectionStatus == MeterConnectionStatus.remote || _connectionStatus == MeterConnectionStatus.connected) && _isOnline;
-    
-    return GestureDetector(
-      onTap: canSync && !_isSyncing
-          ? () async {
-              setState(() => _isSyncing = true);
-              try {
-                final newBalance = await _smartMeterService.syncBalance();
-                if (mounted) {
-                  setState(() {
-                    _balance = newBalance;
-                    _isSyncing = false;
-                  });
-                }
-              } catch (e) {
-                if (mounted) {
-                  setState(() => _isSyncing = false);
-                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
-                }
-              }
-            }
-          : null,
-      child: Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: canSync ? 0.2 : 0.05),
-          shape: BoxShape.circle,
-          border: Border.all(color: Colors.white.withValues(alpha: canSync ? 0.3 : 0.1)),
-        ),
-        child: _isSyncing
-            ? const SizedBox(
-                width: 24,
-                height: 24,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                ),
-              )
-            : Icon(
-                Icons.refresh_rounded, 
-                color: canSync ? Colors.white : Colors.white24, 
-                size: 28
-              ),
-      ),
-    );
-  }
 
   // ── Smart Feature Handlers ────────────────────────────────────────────────
   void _showOneTapBuyDialog() {
@@ -1023,7 +975,7 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
                   const SizedBox(height: 16),
                   if (_meters.isNotEmpty)
                     DropdownButtonFormField<String>(
-                      value: selectedMeter,
+                      initialValue: selectedMeter,
                       decoration: InputDecoration(
                         labelText: "Select Meter",
                         border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
@@ -1057,6 +1009,7 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
                   onPressed: () {
                     final amt = double.tryParse(amtController.text) ?? 0;
                     if (amt >= 50) {
+                      if (!context.mounted) return;
                       Navigator.pop(context);
                       _processFastPurchase(amt, selectedMeter);
                     } else {
@@ -1106,7 +1059,7 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
          await StorageService.saveBalance(newBalance);
          
          if (debtDeducted > 0) {
-            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(
               content: Text("Emergency Debt of KES $debtDeducted automatically deducted."),
               backgroundColor: Colors.orange,
             ));
@@ -1118,8 +1071,10 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(data['message'] ?? "Purchase failed")));
       }
     } catch (e) {
-      if (mounted) Navigator.pop(context);
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Purchase failed. Server connection error.")));
+      if (mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Purchase failed. Server connection error.")));
+      }
     }
   }
 
@@ -1168,6 +1123,7 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
   Future<void> _handleEmergencyToken() async {
     final debt = await StorageService.getEmergencyDebt();
     if (debt > 0) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
         content: Text("Clear your existing emergency debt before requesting another SOS token."),
         backgroundColor: Colors.redAccent,
@@ -1175,6 +1131,7 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
       return;
     }
 
+    if (!mounted) return;
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
