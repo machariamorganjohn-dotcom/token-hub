@@ -4,7 +4,18 @@ import 'security_service.dart';
 
 class StorageService {
   static const String keyBalance = 'user_balance';
-  static const String keyUserName = 'user_name';
+  static const String keyPurchaseCount = 'purchase_count';
+
+  static Future<void> incrementPurchaseCount() async {
+    final prefs = await SharedPreferences.getInstance();
+    int current = prefs.getInt(keyPurchaseCount) ?? 0;
+    await prefs.setInt(keyPurchaseCount, current + 1);
+  }
+
+  static Future<int> getPurchaseCount() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getInt(keyPurchaseCount) ?? 0;
+  }
   static const String keyUserPhone = 'user_phone';
   static const String keyMeters = 'saved_meters';
   static const String keyTransactions = 'user_transactions';
@@ -18,6 +29,28 @@ class StorageService {
   static const String keyToken = 'auth_token';
   static const String keyUserId = 'user_id';
   static const String keySetupDone = 'is_setup_done';
+  static const String keyPoints = 'loyalty_points';
+  static const String keyLanguage = 'app_language';
+
+  static Future<void> savePoints(int points) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(keyPoints, points);
+  }
+
+  static Future<int> getPoints() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getInt(keyPoints) ?? 1250; // Default for existing users
+  }
+
+  static Future<void> saveLanguage(String lang) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(keyLanguage, lang);
+  }
+
+  static Future<String> getLanguage() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(keyLanguage) ?? 'en';
+  }
 
   static Future<void> saveBalance(double balance) async {
     final prefs = await SharedPreferences.getInstance();
@@ -137,6 +170,13 @@ class StorageService {
     } catch (e) {
       return [];
     }
+  }
+
+  static Future<void> saveTransactions(List<Map<String, String>> transactions) async {
+    final prefs = await SharedPreferences.getInstance();
+    final security = SecurityService();
+    final jsonStr = jsonEncode(transactions);
+    await prefs.setString(keyTransactions, security.encryptData(jsonStr));
   }
 
   // Meter Storage

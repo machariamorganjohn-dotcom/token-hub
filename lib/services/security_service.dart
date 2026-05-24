@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:math';
+import 'package:local_auth/local_auth.dart';
 
 /// A service dedicated to protecting the app from theft, piracy, and system vulnerabilities.
 class SecurityService {
@@ -23,15 +24,31 @@ class SecurityService {
     _isSystemIntegrityCompromised = false; 
   }
 
-  /// Simulates biometric authentication (Fingerprint/FaceID).
+  /// Authenticates using the device's lock screen security (Biometrics/PIN/Pattern).
   Future<bool> authenticateWithBiometrics() async {
     if (!_biometricsEnabled) return false;
     
-    // Simulate biometric prompt delay
-    await Future.delayed(const Duration(milliseconds: 1500));
-    
-    // 98% success rate for simulation
-    return Random().nextDouble() > 0.02;
+    final LocalAuthentication auth = LocalAuthentication();
+    try {
+      final bool canAuthenticateWithBiometrics = await auth.canCheckBiometrics;
+      final bool canAuthenticate = canAuthenticateWithBiometrics || await auth.isDeviceSupported();
+
+      if (!canAuthenticate) {
+        return false;
+      }
+
+      final bool didAuthenticate = await auth.authenticate(
+        localizedReason: 'Please authenticate to proceed with Token Hub security check',
+        options: const AuthenticationOptions(
+          biometricOnly: false,
+          stickyAuth: true,
+        ),
+      );
+      
+      return didAuthenticate;
+    } catch (e) {
+      return false;
+    }
   }
 
   void setBiometricsEnabled(bool enabled) {

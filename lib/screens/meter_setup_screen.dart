@@ -71,7 +71,25 @@ class _MeterSetupScreenState extends State<MeterSetupScreen> {
         child: Column(
           children: [
             const SizedBox(height: 60),
-            const Icon(Icons.flash_on_rounded, color: Colors.amber, size: 64),
+            Container(
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.white.withValues(alpha: 0.2),
+                    blurRadius: 20,
+                  ),
+                ],
+              ),
+              child: ClipOval(
+                child: Image.asset(
+                  'assets/images/logo.png',
+                  width: 80,
+                  height: 80,
+                  fit: BoxFit.cover,
+                ),
+              ),
+            ),
             const SizedBox(height: 24),
             const Text(
               "Initial Meter Setup",
@@ -82,12 +100,12 @@ class _MeterSetupScreenState extends State<MeterSetupScreen> {
               ),
             ),
             const SizedBox(height: 8),
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 40),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 40),
               child: Text(
                 "Enter the current units displayed on your physical KPLC meter to sync your phone.",
                 textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.white70, fontSize: 14),
+                style: TextStyle(color: Colors.white.withValues(alpha: 0.9), fontSize: 14),
               ),
             ),
             const Spacer(),
@@ -121,9 +139,9 @@ class _MeterSetupScreenState extends State<MeterSetupScreen> {
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
       margin: const EdgeInsets.symmetric(horizontal: 32),
       decoration: BoxDecoration(
-        color: Colors.black26,
+        color: Colors.black.withValues(alpha: 0.4),
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: Colors.white10),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -138,9 +156,9 @@ class _MeterSetupScreenState extends State<MeterSetupScreen> {
             ),
           ),
           const SizedBox(width: 12),
-          const Text(
+          Text(
             "Units",
-            style: TextStyle(color: Colors.white38, fontSize: 20),
+            style: TextStyle(color: Colors.white.withValues(alpha: 0.7), fontSize: 20),
           ),
         ],
       ),
@@ -176,7 +194,7 @@ class _MeterSetupScreenState extends State<MeterSetupScreen> {
         width: 70,
         height: 70,
         decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.05),
+          color: Colors.white.withValues(alpha: 0.1),
           shape: BoxShape.circle,
         ),
         child: Center(

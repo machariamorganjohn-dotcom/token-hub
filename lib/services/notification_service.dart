@@ -1,6 +1,6 @@
 import 'dart:async';
 
-enum NotificationType { paymentSuccess, paymentFailed, meterConnected, meterDisconnected }
+enum NotificationType { paymentSuccess, paymentFailed, meterConnected, meterDisconnected, lowBalance }
 
 class AppNotification {
   final String title;

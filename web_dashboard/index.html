@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Token Hub | Web Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=Inter:wght@300;400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="app">
+        <!-- Auth View -->
+        <div id="auth-view" class="view hidden">
+            <div class="auth-container">
+                <div class="auth-card">
+                    <div class="auth-header">
+                        <img src="assets/images/logo.png" alt="Logo" class="auth-logo">
+                        <h1>Welcome Back</h1>
+                        <p>Sign in to manage your smart energy</p>
+                    </div>
+                    <form id="login-form">
+                        <div class="input-group">
+                            <label>Phone Number</label>
+                            <input type="tel" id="login-phone" placeholder="0712345678" required>
+                        </div>
+                        <div class="input-group">
+                            <label>Password</label>
+                            <div class="password-wrapper">
+                                <input type="password" id="login-password" placeholder="••••••••" required>
+                                <button type="button" class="toggle-password"><i class="fas fa-eye"></i></button>
+                            </div>
+                        </div>
+                        <button type="submit" class="btn-primary full-width" id="login-btn">
+                            <span class="btn-text">Sign In</span>
+                            <div class="loader hidden"></div>
+                        </button>
+                    </form>
+                    <p class="auth-footer">Don't have an account? <a href="#" id="show-signup">Create one in the app</a></p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Dashboard View -->
+        <div id="dashboard-view" class="view hidden">
+            <header class="dash-header">
+                <div class="container header-flex">
+                    <div class="logo">
+                        <img src="assets/images/logo.png" alt="Logo">
+                        <span>Token Hub</span>
+                    </div>
+                    <div class="user-profile">
+                        <span id="user-name">User</span>
+                        <button id="logout-btn" class="btn-icon"><i class="fas fa-sign-out-alt"></i></button>
+                    </div>
+                </div>
+            </header>
+
+            <main class="container dash-main">
+                <div class="dash-grid">
+                    <!-- Left Column -->
+                    <div class="dash-left">
+                        <div class="card balance-card">
+                            <div class="card-header">
+                                <h3>Current Balance</h3>
+                                <span class="status-pill online">Online</span>
+                            </div>
+                            <div class="balance-display">
+                                <span id="balance-value">0.00</span>
+                                <span class="unit">kWh</span>
+                            </div>
+                            <div class="live-stats">
+                                <div class="stat">
+                                    <i class="fas fa-bolt"></i>
+                                    <span id="live-voltage">230.5V</span>
+                                </div>
+                                <div class="stat">
+                                    <i class="fas fa-tachometer-alt"></i>
+                                    <span id="live-load">0.45kW</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="card quick-actions">
+                            <h3>Quick Actions</h3>
+                            <div class="action-grid">
+                                <button class="action-btn" id="btn-buy-token">
+                                    <i class="fas fa-plus-circle"></i>
+                                    <span>Buy Token</span>
+                                </button>
+                                <button class="action-btn" id="btn-add-meter">
+                                    <i class="fas fa-plug"></i>
+                                    <span>Add Meter</span>
+                                </button>
+                                <button class="action-btn" id="btn-sos">
+                                    <i class="fas fa-emergency"></i>
+                                    <span>SOS Token</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Right Column -->
+                    <div class="dash-right">
+                        <div class="card transactions-card">
+                            <div class="card-header">
+                                <h3>Recent Transactions</h3>
+                                <a href="#" class="view-all">View All</a>
+                            </div>
+                            <div id="transaction-list" class="transaction-list">
+                                <!-- Transactions injected here -->
+                                <div class="empty-state">No recent transactions</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </main>
+        </div>
+
+        <!-- Modal Overlay -->
+        <div id="modal-overlay" class="modal-overlay hidden">
+            <div class="modal-card">
+                <button class="close-modal"><i class="fas fa-times"></i></button>
+                <div id="modal-content">
+                    <!-- Modal content injected here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

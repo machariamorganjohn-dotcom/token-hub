@@ -1,0 +1,6 @@
+@echo off
+echo Starting Token Hub Backend...
+start /b node backend/server.js
+echo Starting Token Hub Frontend (Web)...
+flutter run -d chrome
+pause

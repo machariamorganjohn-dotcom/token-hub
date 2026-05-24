@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:flutter/services.dart';
 import 'screens/splash_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/signup_screen.dart';
@@ -12,6 +13,15 @@ import 'widgets/global_error_widget.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
+  
+  // Set premium status bar and navigation bar styles
+  SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
+    statusBarColor: Colors.transparent,
+    statusBarIconBrightness: Brightness.dark,
+    systemNavigationBarColor: Colors.white,
+    systemNavigationBarIconBrightness: Brightness.dark,
+  ));
+
   runApp(
     ChangeNotifierProvider(
       create: (_) => ThemeProvider(),

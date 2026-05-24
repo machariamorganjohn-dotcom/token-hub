@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://token-hub-backend.onrender.com/sitemap.xml

@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import '../widgets/custom_text_field.dart';
 import '../theme/app_theme.dart';
@@ -156,8 +157,14 @@ class _AddMeterScreenState extends State<AddMeterScreen> {
       } else {
         if (mounted) {
           setState(() => _isConnecting = false);
+          String errorMessage = "Failed to add meter to backend.";
+          try {
+            final data = jsonDecode(response.body);
+            errorMessage = data['message'] ?? errorMessage;
+          } catch (_) {}
+          
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text("Failed to add meter to backend."), backgroundColor: Colors.red),
+            SnackBar(content: Text(errorMessage), backgroundColor: Colors.red),
           );
         }
       }

@@ -12,10 +12,14 @@ import '../services/smart_meter_service.dart';
 import '../services/security_service.dart';
 import '../services/notification_service.dart';
 import '../services/api_service.dart';
+import 'chat_screen.dart';
+import 'referral_screen.dart';
+import '../services/localization_service.dart';
 import 'dart:async';
 import 'dart:math' as math;
 import '../services/network_service.dart';
 import 'package:flutter/services.dart';
+import 'package:http/http.dart' as http;
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -33,6 +37,8 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
   String _lastLogin = "";
   bool _isLoading = true;
   bool _isOnline = true;
+  int _points = 1250;
+  String _language = "en";
   MeterConnectionStatus _connectionStatus = MeterConnectionStatus.disconnected;
   MeterData? _liveData;
   final _smartMeterService = SmartMeterService();
@@ -42,6 +48,7 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
   StreamSubscription? _notificationSubscription;
   StreamSubscription? _refreshSubscription;
   Timer? _consumptionTimer;
+  bool _hasNotifiedLowBalance = false;
 
   @override
   void initState() {
@@ -100,7 +107,9 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
         ),
         backgroundColor: notification.type == NotificationType.paymentSuccess 
             ? AppTheme.successColor 
-            : AppTheme.primaryColor,
+            : notification.type == NotificationType.lowBalance
+                ? Colors.redAccent
+                : AppTheme.primaryColor,
         behavior: SnackBarBehavior.floating,
         margin: const EdgeInsets.all(16),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -152,22 +161,47 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
   }
 
   Future<void> _loadData() async {
-    final userData = await StorageService.getUserData();
+    // 1. Instant Load from Local Storage (Pre-sync)
+    final localUserData = await StorageService.getUserData();
+    final localBalance = await StorageService.getBalance();
+    final localMeters = await StorageService.getMeters();
+    final localTransactions = await StorageService.getTransactions();
     final history = await StorageService.getLoginHistory();
-    
-    // Deterministic Sync: Fetch accurate balance from backend (accounts for consumption while app was closed)
-    final balance = await _smartMeterService.syncBalance();
-    
-    // Sync meters from backend
-    final meters = await _smartMeterService.syncMetersFromBackend();
-    
-    // Sync transactions from backend
-    List<Map<String, String>> transactions = [];
+    final points = await StorageService.getPoints();
+    final lang = await StorageService.getLanguage();
+
+    if (mounted) {
+      setState(() {
+        _userName = localUserData['name'] ?? 'User';
+        _balance = localBalance;
+        _meters = localMeters;
+        _transactions = localTransactions;
+        _points = points;
+        _language = lang;
+        if (history.isNotEmpty) {
+          final dt = DateTime.parse(history.first);
+          _lastLogin = "${dt.day} ${_getMonth(dt.month)} ${dt.year}";
+        }
+        _isLoading = false;
+      });
+    }
+
+    // 2. Parallel Sync from Backend (Background)
     try {
-      final response = await ApiService.getTransactions();
-      if (response.statusCode == 200) {
-        final List<dynamic> data = jsonDecode(response.body);
-        transactions = data.map((t) => {
+      final results = await Future.wait([
+        _smartMeterService.syncBalance(),
+        _smartMeterService.syncMetersFromBackend(),
+        ApiService.getTransactions(),
+      ]);
+
+      final double syncedBalance = results[0] as double;
+      final List<Map<String, String>> syncedMeters = results[1] as List<Map<String, String>>;
+      final responseTransactions = results[2] as http.Response;
+
+      List<Map<String, String>> syncedTransactions = localTransactions;
+      if (responseTransactions.statusCode == 200) {
+        final List<dynamic> data = jsonDecode(responseTransactions.body);
+        syncedTransactions = data.map<Map<String, String>>((t) => {
           'title': t['title'].toString(),
           'date': t['timestamp'].toString(),
           'amount': 'KES ${t['amount']}',
@@ -176,33 +210,64 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
           'token': t['tokenPayload'].toString(),
           'isSuccess': t['isSuccess'].toString(),
         }).toList();
-      } else {
-        transactions = await StorageService.getTransactions();
+        await StorageService.saveTransactions(syncedTransactions);
+      }
+
+      if (mounted) {
+        setState(() {
+          _balance = syncedBalance;
+          _meters = syncedMeters;
+          _transactions = syncedTransactions;
+        });
       }
     } catch (e) {
-      transactions = await StorageService.getTransactions();
+      debugPrint("Background sync error: $e");
     }
-
-    String lastLoginText = "";
-    if (history.isNotEmpty) {
-      final lastLoginDate = DateTime.parse(history.first);
-      lastLoginText = "${lastLoginDate.day}/${lastLoginDate.month}/${lastLoginDate.year} ${lastLoginDate.hour}:${lastLoginDate.minute.toString().padLeft(2, '0')}";
-    }
-
+    
     if (mounted) {
-      setState(() {
-        _userName = userData['name']!;
-        _balance = balance;
-        _meters = meters;
-        _transactions = transactions;
-        _lastLogin = lastLoginText;
-        _isLoading = false;
-      });
       _checkSmartReminders();
     }
   }
 
+  void _toggleLanguage() async {
+    final newLang = _language == "en" ? "sw" : "en";
+    await StorageService.saveLanguage(newLang);
+    setState(() => _language = newLang);
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(newLang == "sw" ? "Lugha imebadilishwa kuwa Kiswahili" : "Language changed to English"),
+      duration: const Duration(seconds: 1),
+    ));
+  }
+
+  void _shareReceipt(Map<String, String> tx) {
+    final receiptText = """
+🚀 TOKEN HUB RECEIPT 🚀
+------------------------
+Date: ${tx['date']}
+Amount: ${tx['amount']}
+Units: ${tx['units']}
+Meter: ${tx['meter']}
+
+TOKEN: ${tx['token']}
+
+Thank you for choosing Token Hub!
+------------------------
+Generated by Token Hub National App
+""";
+    Clipboard.setData(ClipboardData(text: receiptText));
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Receipt copied for sharing!")));
+  }
+
   void _checkSmartReminders() {
+    if (_balance <= 2.0 && !_hasNotifiedLowBalance && _meters.isNotEmpty) {
+      _hasNotifiedLowBalance = true;
+      NotificationService().notify(AppNotification(
+        title: "Low Balance Warning",
+        message: "Dear customer you meter units are 2 units, Kindly Topup to avoid running out of power, Thank you",
+        type: NotificationType.lowBalance,
+      ));
+    }
+
     if (_balance < 4.0 && _meters.isNotEmpty) {
       showDialog(
         context: context,
@@ -216,7 +281,7 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
               Text("Low Balance Alert"),
             ],
           ),
-          content: Text("You have less than 4 Units remaining (${_balance.toStringAsFixed(2)} Units). Please recharge to avoid disconnection."),
+          content: Text("You have less than 4 Units remaining (${_balance.toStringAsFixed(2)} Units). Please recharge or use the Emergency SOS option to avoid disconnection."),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
@@ -243,6 +308,14 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
     }
 
     return Scaffold(
+      floatingActionButton: FloatingActionButton(
+        onPressed: () => Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const ChatScreen()),
+        ),
+        backgroundColor: AppTheme.primaryColor,
+        child: const Icon(Icons.psychology_rounded, color: Colors.white, size: 30),
+      ),
       body: RefreshIndicator(
         onRefresh: _loadData,
         child: SingleChildScrollView(
@@ -414,9 +487,9 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
                   Row(
                     children: [
                       Text(
-                        "Hello, $_userName!",
+                        "${LocalizationService.getString('welcome', _language)}, $_userName!",
                         style: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.7),
+                          color: Colors.white.withValues(alpha: 0.9),
                           fontSize: 14,
                         ),
                       ),
@@ -430,7 +503,7 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
                       child: Text(
                         "Last login: $_lastLogin",
                         style: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.5),
+                          color: Colors.white.withValues(alpha: 0.8),
                           fontSize: 10,
                           fontWeight: FontWeight.w500,
                         ),
@@ -448,20 +521,23 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
                         ),
                       ),
                       const SizedBox(width: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: Colors.amber.withValues(alpha: 0.2),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: Colors.amber.withValues(alpha: 0.5)),
-                        ),
-                        child: const Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.stars_rounded, color: Colors.amber, size: 12),
-                            SizedBox(width: 4),
-                            Text("1,250 Pts", style: TextStyle(color: Colors.amber, fontSize: 10, fontWeight: FontWeight.bold)),
-                          ],
+                      GestureDetector(
+                        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ReferralScreen())),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: Colors.amber.withValues(alpha: 0.2),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: Colors.amber.withValues(alpha: 0.5)),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.stars_rounded, color: Colors.amber, size: 12),
+                              const SizedBox(width: 4),
+                              Text("$_points Pts", style: const TextStyle(color: Colors.amber, fontSize: 10, fontWeight: FontWeight.bold)),
+                            ],
+                          ),
                         ),
                       ),
                     ],
@@ -471,8 +547,20 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
               Row(
                 children: [
                   IconButton(
+                    onPressed: _toggleLanguage,
+                    icon: Container(
+                      padding: const EdgeInsets.all(4),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.white70),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(_language.toUpperCase(), style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+                    ),
+                    tooltip: "Change Language",
+                  ),
+                  IconButton(
                     onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const SupportScreen())),
-                    icon: const Icon(Icons.help_outline_rounded, color: Colors.white70),
+                    icon: const Icon(Icons.help_outline_rounded, color: Colors.white),
                     tooltip: "Support",
                   ),
                   IconButton(
@@ -506,14 +594,14 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
       width: double.infinity,
       padding: const EdgeInsets.all(28),
       decoration: BoxDecoration(
-        color: Colors.black.withValues(alpha: 0.4),
+        color: Colors.black.withValues(alpha: 0.6),
         borderRadius: BorderRadius.circular(32),
-        border: Border.all(color: Colors.white10),
+        border: Border.all(color: AppTheme.primaryColor.withValues(alpha: 0.3), width: 1.5),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.5),
-            blurRadius: 20,
-            offset: const Offset(0, 10),
+            color: AppTheme.primaryColor.withValues(alpha: 0.2),
+            blurRadius: 40,
+            spreadRadius: -10,
           )
         ],
       ),
@@ -522,35 +610,49 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text(
-                "DIGITAL ENERGY METER",
-                style: TextStyle(
-                  color: Colors.greenAccent,
-                  fontSize: 10,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 2,
+              _buildLivePulseIndicator(),
+              GestureDetector(
+                onTap: _showManualSyncDialog,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+                  ),
+                  child: const Row(
+                    children: [
+                      Icon(Icons.sync_rounded, color: Colors.greenAccent, size: 14),
+                      SizedBox(width: 4),
+                      Text("SYNC", style: TextStyle(color: Colors.greenAccent, fontSize: 10, fontWeight: FontWeight.bold)),
+                    ],
+                  ),
                 ),
               ),
-              _buildLivePulseIndicator(),
             ],
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 32),
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.baseline,
             textBaseline: TextBaseline.alphabetic,
             children: [
               _buildMeterSegment(whole),
-              const Text(".", style: TextStyle(color: Colors.amber, fontSize: 40, fontWeight: FontWeight.bold)),
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 4),
+                child: Text(".", style: TextStyle(color: Colors.redAccent, fontSize: 48, fontWeight: FontWeight.bold)),
+              ),
               _buildMeterSegment(decimal, isDecimal: true),
-              const SizedBox(width: 12),
-              const Text(
-                "kWh",
-                style: TextStyle(color: Colors.white38, fontSize: 16, fontWeight: FontWeight.bold),
+              const SizedBox(width: 14),
+              const Column(
+                children: [
+                  Text("kWh", style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold, letterSpacing: 1)),
+                  Text("UNITS", style: TextStyle(color: Colors.white54, fontSize: 10, fontWeight: FontWeight.bold)),
+                ],
               ),
             ],
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 24),
           _buildSyncStatus(),
         ],
       ),
@@ -559,20 +661,29 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
 
   Widget _buildMeterSegment(String text, {bool isDecimal = false}) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
         color: Colors.black,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.white12),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.15)),
+        boxShadow: [
+          BoxShadow(
+            color: (isDecimal ? Colors.redAccent : Colors.greenAccent).withValues(alpha: 0.2),
+            blurRadius: 10,
+          ),
+        ],
       ),
       child: Text(
         text,
         style: TextStyle(
-          color: isDecimal ? Colors.redAccent : Colors.amber,
-          fontSize: 44,
+          color: isDecimal ? Colors.redAccent : Colors.greenAccent,
+          fontSize: 48,
           fontWeight: FontWeight.bold,
           fontFamily: 'Courier',
-          letterSpacing: 4,
+          letterSpacing: 6,
+          shadows: [
+            Shadow(color: isDecimal ? Colors.redAccent : Colors.greenAccent, blurRadius: 15),
+          ],
         ),
       ),
     );
@@ -590,7 +701,7 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
           ),
         ),
         const SizedBox(width: 8),
-        const Text("LIVE", style: TextStyle(color: Colors.white38, fontSize: 10, fontWeight: FontWeight.bold)),
+        const Text("LIVE", style: TextStyle(color: Colors.white70, fontSize: 10, fontWeight: FontWeight.bold)),
       ],
     );
   }
@@ -599,11 +710,11 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        const Icon(Icons.history, color: Colors.white24, size: 12),
+        const Icon(Icons.history, color: Colors.white60, size: 12),
         const SizedBox(width: 6),
         Text(
           "Last synced with KPLC: ${DateTime.now().hour}:${DateTime.now().minute.toString().padLeft(2, '0')}",
-          style: const TextStyle(color: Colors.white24, fontSize: 10),
+          style: const TextStyle(color: Colors.white60, fontSize: 10),
         ),
       ],
     );
@@ -638,12 +749,12 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
                   decoration: const BoxDecoration(color: Colors.greenAccent, shape: BoxShape.circle),
                 ),
               ),
-            Icon(icon, color: Colors.white70, size: 14),
+            Icon(icon, color: Colors.white.withValues(alpha: 0.9), size: 14),
             const SizedBox(width: 4),
             Text(value, style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
           ],
         ),
-        Text(label, style: TextStyle(color: Colors.white.withValues(alpha: 0.5), fontSize: 10)),
+        Text(label, style: TextStyle(color: Colors.white.withValues(alpha: 0.7), fontSize: 10)),
       ],
     );
   }
@@ -673,6 +784,7 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
               Icons.bolt_rounded,
               AppTheme.primaryColor,
               () async {
+                HapticFeedback.lightImpact();
                 await Navigator.push(context, MaterialPageRoute(builder: (context) => const BuyTokenScreen()));
                 _loadData(); 
               },
@@ -681,7 +793,10 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
               "History",
               Icons.receipt_long_rounded,
               Colors.orange,
-              () => Navigator.push(context, MaterialPageRoute(builder: (context) => const TransactionHistoryScreen())),
+              () {
+                HapticFeedback.lightImpact();
+                Navigator.push(context, MaterialPageRoute(builder: (context) => const TransactionHistoryScreen()));
+              },
             ),
             _buildActionCard(
               "Add Meter",
@@ -716,7 +831,10 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
                 "One-Tap Buy",
                 Icons.touch_app_rounded,
                 Colors.blue,
-                () => _showOneTapBuyDialog(),
+                () {
+                  HapticFeedback.selectionClick();
+                  _showOneTapBuyDialog();
+                },
                 isVertical: false,
               ),
             ),
@@ -726,7 +844,10 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
                 "SOS KSh 150",
                 Icons.health_and_safety_rounded,
                 Colors.redAccent,
-                () => _handleEmergencyToken(),
+                () {
+                  HapticFeedback.mediumImpact();
+                  _handleEmergencyToken();
+                },
                 isVertical: false,
               ),
             ),
@@ -848,6 +969,7 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
           amount: tx['amount'] ?? "",
           isSuccess: tx['isSuccess'] == 'true',
           token: tx['token'],
+          onShare: () => _shareReceipt(tx),
         );
       },
     );
@@ -954,7 +1076,7 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
   }
 
 
-  // ── Smart Feature Handlers ────────────────────────────────────────────────
+  // â”€â”€ Smart Feature Handlers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   void _showOneTapBuyDialog() {
     String selectedMeter = _meters.isNotEmpty ? _meters.first['number']! : "No Meter Found";
     final amtController = TextEditingController(text: "500");
@@ -1028,6 +1150,17 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
   }
 
   Future<void> _processFastPurchase(double amount, String targetMeter) async {
+    // 1. National Level Security: Biometric Authorization
+    final security = SecurityService();
+    final authenticated = await security.authenticateWithBiometrics();
+    if (!authenticated) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Authentication failed. Transaction cancelled.")));
+      }
+      return;
+    }
+
+    if (!mounted) return;
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -1059,10 +1192,12 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
          await StorageService.saveBalance(newBalance);
          
          if (debtDeducted > 0) {
-            if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-              content: Text("Emergency Debt of KES $debtDeducted automatically deducted."),
-              backgroundColor: Colors.orange,
-            ));
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                content: Text("Emergency Debt of KES $debtDeducted automatically deducted."),
+                backgroundColor: Colors.orange,
+              ));
+            }
          }
 
          _loadData();
@@ -1078,7 +1213,149 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
     }
   }
 
+  // â”€â”€ Manual Unit Synchronization â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  Future<void> _showManualSyncDialog() async {
+    final security = SecurityService();
+    bool authenticated = false;
+
+    // 1. Try Biometrics
+    authenticated = await security.authenticateWithBiometrics();
+
+    if (!authenticated) {
+      if (!mounted) return;
+      authenticated = await _showPasswordVerificationDialog();
+    }
+
+    if (authenticated) {
+      if (!mounted) return;
+      _showUnitEditDialog();
+    }
+  }
+
+  Future<bool> _showPasswordVerificationDialog() async {
+    final passController = TextEditingController();
+    bool showPassword = false;
+    
+    bool? result = await showDialog<bool>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          title: const Text("Verify Security", style: TextStyle(fontWeight: FontWeight.bold)),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text("Please enter your account password to verify this action, just as you do when signing in.", 
+                style: TextStyle(fontSize: 13, color: AppTheme.subTextColor)),
+              const SizedBox(height: 20),
+              TextField(
+                controller: passController,
+                obscureText: !showPassword,
+                decoration: InputDecoration(
+                  labelText: "Account Password",
+                  prefixIcon: const Icon(Icons.lock_person_rounded, color: AppTheme.primaryColor),
+                  suffixIcon: IconButton(
+                    icon: Icon(
+                      showPassword ? Icons.visibility_off_rounded : Icons.visibility_rounded,
+                      color: AppTheme.primaryColor,
+                    ),
+                    onPressed: () => setDialogState(() => showPassword = !showPassword),
+                  ),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("Cancel")),
+            ElevatedButton(
+              onPressed: () async {
+                // Verify password with backend
+                final userData = await StorageService.getUserData();
+                final response = await ApiService.login(userData['phone']!, passController.text);
+                if (response.statusCode == 200) {
+                   if (context.mounted) Navigator.pop(context, true);
+                } else {
+                   if (context.mounted) {
+                     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Invalid password. Please use your login password.")));
+                   }
+                }
+              },
+              child: const Text("Confirm"),
+            ),
+          ],
+        ),
+      ),
+    );
+    return result ?? false;
+  }
+
+  void _showUnitEditDialog() {
+    final unitController = TextEditingController(text: _balance.toStringAsFixed(2));
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        title: const Text("Sync Meter Units", style: TextStyle(fontWeight: FontWeight.bold)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text("Enter the current units displayed on your physical meter for exact synchronization.", style: TextStyle(fontSize: 13, color: AppTheme.subTextColor)),
+            const SizedBox(height: 24),
+            TextField(
+              controller: unitController,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: Colors.amber),
+              decoration: InputDecoration(
+                suffixText: "kWh",
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(20)),
+                filled: true,
+                fillColor: Colors.black.withValues(alpha: 0.05),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel")),
+          ElevatedButton(
+            onPressed: () async {
+              final newUnits = double.tryParse(unitController.text);
+              if (newUnits != null) {
+                final navigator = Navigator.of(context);
+                final messenger = ScaffoldMessenger.of(context);
+                final userId = await StorageService.getUserId();
+                final response = await ApiService.updateBalance(userId ?? '', newUnits);
+                
+                if (response.statusCode == 200) {
+                  await StorageService.saveBalance(newUnits);
+                  if (mounted) {
+                    setState(() => _balance = newUnits);
+                    navigator.pop();
+                    messenger.showSnackBar(const SnackBar(content: Text("Meter units synchronized successfully!"), backgroundColor: Colors.green));
+                  }
+                } else {
+                   if (mounted) {
+                     String errorMessage = "Failed to sync with server.";
+                     try {
+                       final data = jsonDecode(response.body);
+                       errorMessage = data['message'] ?? errorMessage;
+                     } catch (_) {}
+                     
+                     messenger.showSnackBar(SnackBar(content: Text(errorMessage), backgroundColor: Colors.red));
+                   }
+                }
+              }
+            },
+            child: const Text("Update Units"),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _showTokenDialog(String token, String units, String paid) {
+     HapticFeedback.mediumImpact();
      showDialog(
        context: context, 
        builder: (_) => AlertDialog(
@@ -1137,7 +1414,7 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
       builder: (context) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
         title: const Text("Get Emergency Token", style: TextStyle(fontWeight: FontWeight.bold)),
-        content: const Text("You will instantly receive KES 150 worth of units. This amount will be automatically deducted from your next token purchase."),
+        content: const Text("You will instantly receive KES 150 worth of units. A total of KES 160 (including a KES 10 service fee) will be automatically deducted from your next token purchase."),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel")),
           ElevatedButton(
@@ -1163,7 +1440,7 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
                final currentBalance = await StorageService.getBalance();
                final newUnits = 150 * 0.05;
                await StorageService.saveBalance(currentBalance + newUnits);
-               await StorageService.saveEmergencyDebt(150.0);
+               await StorageService.saveEmergencyDebt(160.0);
 
                String token = "";
                final random = math.Random();
@@ -1177,7 +1454,7 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
                await StorageService.saveTransaction({
                  'title': 'SOS Emergency Token',
                  'date': dateStr,
-                 'amount': 'KES 150 (Credit)',
+                 'amount': 'KES 150 (Debt: 160)',
                  'units': '${newUnits.toStringAsFixed(2)} Units',
                  'meter': _meters.first['number']!,
                  'token': token,
@@ -1187,7 +1464,7 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
                if (!context.mounted) return;
                Navigator.pop(context); // close loader
                _loadData();
-               _showTokenDialog(token, newUnits.toStringAsFixed(2), "150 (Credit)");
+               _showTokenDialog(token, newUnits.toStringAsFixed(2), "150 (Total Debt: 160)");
             }, 
             child: const Text("Get SOS Token", style: TextStyle(color: Colors.white)),
           ),

@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: token-hub-backend
+    env: node
+    plan: free
+    buildCommand: npm install
+    startCommand: node server.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: MONGO_URI
+        sync: false # Set this in the Render dashboard
+      - key: JWT_SECRET
+        generateValue: true
+      - key: DARAJA_CONSUMER_KEY
+        sync: false
+      - key: DARAJA_CONSUMER_SECRET
+        sync: false
+      - key: DARAJA_SHORTCODE
+        sync: false
+      - key: DARAJA_LNM_PASSKEY
+        sync: false

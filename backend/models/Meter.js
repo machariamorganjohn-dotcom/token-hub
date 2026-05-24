@@ -8,4 +8,7 @@ const meterSchema = new mongoose.Schema({
   addedAt: { type: Date, default: Date.now }
 });
 
+meterSchema.index({ user: 1 });
+meterSchema.index({ number: 1 });
+
 module.exports = mongoose.model('Meter', meterSchema);

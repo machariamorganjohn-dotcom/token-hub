@@ -204,7 +204,7 @@ class _SignUpScreenState extends State<SignUpScreen>
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
         decoration: BoxDecoration(
-          border: Border.all(color: isDark ? Colors.white24 : Colors.black12),
+          border: Border.all(color: isDark ? Colors.white38 : Colors.black26),
           borderRadius: BorderRadius.circular(12),
         ),
         child: Row(
@@ -348,12 +348,12 @@ class _SignUpScreenState extends State<SignUpScreen>
                       const SizedBox(height: 24),
                       Row(
                         children: [
-                          Expanded(child: Divider(color: isDark ? Colors.white24 : Colors.black12)),
+                          Expanded(child: Divider()),
                           Padding(
                             padding: const EdgeInsets.symmetric(horizontal: 16),
-                            child: Text("OR", style: TextStyle(color: isDark ? Colors.white54 : Colors.black54)),
+                            child: Text("OR", style: TextStyle(color: isDark ? Colors.white70 : Colors.black87, fontWeight: FontWeight.bold)),
                           ),
-                          Expanded(child: Divider(color: isDark ? Colors.white24 : Colors.black12)),
+                          Expanded(child: Divider()),
                         ],
                       ),
                       const SizedBox(height: 24),
@@ -383,7 +383,7 @@ class _SignUpScreenState extends State<SignUpScreen>
                             onTap: () => Navigator.push(
                               context,
                               MaterialPageRoute(
-                                  builder: (_) => const LoginScreen()),
+                                  builder: (_) => LoginScreen(initialPhone: _phoneController.text.trim())),
                             ),
                             child: const Text(
                               "Sign In",

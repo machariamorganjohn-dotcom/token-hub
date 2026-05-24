@@ -128,6 +128,11 @@ router.post('/callback', async (req, res) => {
           transaction.amount = PaidAmount;
       }
 
+      // Apply 5 KES platform fee
+      const platformFee = 5;
+      effectiveAmount = Math.max(0, effectiveAmount - platformFee);
+      console.log(`[PAYMENT] Deducted ${platformFee} KES platform fee. Remaining: ${effectiveAmount}`);
+
       // Deduct SOS debt if any
       if (user.emergencyDebt > 0) {
           if (effectiveAmount >= user.emergencyDebt) {
@@ -213,9 +218,10 @@ router.post('/sos', protect, async (req, res) => {
 
     const loanAmount = 150;
     const loanUnits = loanAmount * 0.05;
+    const totalDebt = loanAmount + 10; // 150 principal + 10 KES service fee
     
     user.balance += loanUnits;
-    user.emergencyDebt = loanAmount;
+    user.emergencyDebt = totalDebt;
     user.lastUnitSyncAt = Date.now();
     await user.save();
 

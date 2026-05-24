@@ -67,8 +67,7 @@ class SmartMeterService {
     _currentStatus = MeterConnectionStatus.connecting;
     _statusController.add(_currentStatus);
 
-    // Simulate handshakes with backend/IoT
-    await Future.delayed(const Duration(seconds: 2));
+    // Instant handshake
 
     _currentStatus = MeterConnectionStatus.remote;
     _connectedMeterNumber = meterNumber;
@@ -155,7 +154,7 @@ class SmartMeterService {
       final response = await ApiService.getMeters();
       if (response.statusCode == 200) {
         final List<dynamic> data = jsonDecode(response.body);
-        final meters = data.map((m) => {
+        final meters = data.map<Map<String, String>>((m) => {
           'name': m['name'].toString(),
           'number': m['number'].toString(),
         }).toList();

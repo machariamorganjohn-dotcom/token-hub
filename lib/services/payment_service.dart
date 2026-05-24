@@ -14,7 +14,7 @@ class PaymentService {
   final _paymentStatusController = StreamController<PaymentStatus>.broadcast();
   Stream<PaymentStatus> get paymentStatusStream => _paymentStatusController.stream;
 
-  /// Initiates a payment via the backend API.
+  /// Initiates a payment via the backend API with automatic status polling.
   Future<void> processPayment({
     required PaymentMethod method,
     required double amount,
@@ -22,7 +22,6 @@ class PaymentService {
   }) async {
     _paymentStatusController.add(PaymentStatus.pending);
     
-    // For now, we only handle M-Pesa backend integration
     if (method == PaymentMethod.mpesa) {
       try {
         final userData = await StorageService.getUserData();
@@ -33,10 +32,30 @@ class PaymentService {
         
         if (response.statusCode == 200) {
           final data = jsonDecode(response.body);
-          // The backend returns a transaction and new balance
-          await StorageService.saveBalance((data['newBalance'] ?? 0).toDouble());
+          final transactionId = data['transactionId'] ?? data['checkoutRequestId'];
           
-          _paymentStatusController.add(PaymentStatus.success);
+          // Fast-Polling for status (Check every 2 seconds for 1 minute)
+          int attempts = 0;
+          Timer.periodic(const Duration(seconds: 2), (timer) async {
+            attempts++;
+            if (attempts > 30) {
+              timer.cancel();
+              _paymentStatusController.add(PaymentStatus.failed);
+              return;
+            }
+
+            final statusRes = await ApiService.getTransactionStatus(transactionId);
+            if (statusRes.statusCode == 200) {
+              final statusData = jsonDecode(statusRes.body);
+              if (statusData['status'] == 'success') {
+                timer.cancel();
+                _paymentStatusController.add(PaymentStatus.success);
+              } else if (statusData['status'] == 'failed') {
+                timer.cancel();
+                _paymentStatusController.add(PaymentStatus.failed);
+              }
+            }
+          });
         } else {
           _paymentStatusController.add(PaymentStatus.failed);
         }
@@ -44,7 +63,6 @@ class PaymentService {
         _paymentStatusController.add(PaymentStatus.failed);
       }
     } else {
-      // Mock for others
       await Future.delayed(const Duration(seconds: 3));
       _paymentStatusController.add(PaymentStatus.success);
     }

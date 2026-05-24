@@ -7,20 +7,48 @@ import '../screens/dashboard_screen.dart';
 import '../theme/app_theme.dart';
 import '../services/storage_service.dart';
 import '../services/security_service.dart';
+import 'forgot_password_screen.dart';
 import '../services/api_service.dart';
 
 class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key});
+  final String? initialPhone;
+  const LoginScreen({super.key, this.initialPhone});
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> {
-  final _phoneController = TextEditingController();
+class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStateMixin {
+  late TextEditingController _phoneController;
   final _passwordController = TextEditingController();
   bool _isLoading = false;
   bool _showPassword = false;
+
+  late AnimationController _logoAnimController;
+  late Animation<double> _logoScaleAnim;
+
+  @override
+  void initState() {
+    super.initState();
+    _phoneController = TextEditingController(text: widget.initialPhone);
+    
+    _logoAnimController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 4),
+    )..repeat(reverse: true);
+
+    _logoScaleAnim = Tween<double>(begin: 0.95, end: 1.05).animate(
+      CurvedAnimation(parent: _logoAnimController, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _logoAnimController.dispose();
+    _phoneController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
 
   void _showOtpDialog(BuildContext context) {
     showDialog(
@@ -148,7 +176,7 @@ class _LoginScreenState extends State<LoginScreen> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
         decoration: BoxDecoration(
-          border: Border.all(color: isDark ? Colors.white24 : Colors.black12),
+          border: Border.all(color: isDark ? Colors.white38 : Colors.black26),
           borderRadius: BorderRadius.circular(12),
         ),
         child: Row(
@@ -195,8 +223,29 @@ class _LoginScreenState extends State<LoginScreen> {
                       color: AppTheme.primaryColor.withValues(alpha: 0.1),
                       shape: BoxShape.circle,
                     ),
-                    child: const Icon(Icons.lock_person_rounded,
-                        size: 48, color: AppTheme.primaryColor),
+                    child: ScaleTransition(
+                      scale: _logoScaleAnim,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          boxShadow: [
+                            BoxShadow(
+                              color: AppTheme.primaryColor.withValues(alpha: 0.3),
+                              blurRadius: 30,
+                              spreadRadius: 10,
+                            ),
+                          ],
+                        ),
+                        child: ClipOval(
+                          child: Image.asset(
+                            'assets/images/logo.png',
+                            width: 100,
+                            height: 100,
+                            fit: BoxFit.cover,
+                          ),
+                        ),
+                      ),
+                    ),
                   ),
                 ),
                 const SizedBox(height: 40),
@@ -245,8 +294,9 @@ class _LoginScreenState extends State<LoginScreen> {
                   alignment: Alignment.centerRight,
                   child: TextButton(
                     onPressed: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text("A password reset link has been sent to your phone.")),
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const ForgotPasswordScreen()),
                       );
                     },
                     child: const Text("Forgot Password?", style: TextStyle(color: AppTheme.primaryColor)),
@@ -296,12 +346,12 @@ class _LoginScreenState extends State<LoginScreen> {
                 const SizedBox(height: 24),
                 Row(
                   children: [
-                    Expanded(child: Divider(color: isDark ? Colors.white24 : Colors.black12)),
+                    Expanded(child: Divider()),
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: Text("OR", style: TextStyle(color: isDark ? Colors.white54 : Colors.black54)),
+                      child: Text("OR", style: TextStyle(color: isDark ? Colors.white70 : Colors.black87, fontWeight: FontWeight.bold)),
                     ),
-                    Expanded(child: Divider(color: isDark ? Colors.white24 : Colors.black12)),
+                    Expanded(child: Divider()),
                   ],
                 ),
                 const SizedBox(height: 24),

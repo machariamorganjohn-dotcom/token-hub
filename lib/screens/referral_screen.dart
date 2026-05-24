@@ -1,170 +1,158 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:url_launcher/url_launcher.dart';
 import '../theme/app_theme.dart';
-import '../services/notification_service.dart';
+import '../services/storage_service.dart';
 
-class ReferralScreen extends StatelessWidget {
+class ReferralScreen extends StatefulWidget {
   const ReferralScreen({super.key});
 
-  Future<void> _sharePlayStoreLink(BuildContext context) async {
-    final uri = Uri.parse("https://play.google.com/store/apps/details?id=com.tokenhub.app");
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri);
-    } else {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Mock sharing: Play Store Link Sent!")));
-      }
-    }
+  @override
+  State<ReferralScreen> createState() => _ReferralScreenState();
+}
 
-    // Simulate earning the 4 Unit token because a "friend downloaded it"
-    Future.delayed(const Duration(seconds: 4), () {
-      NotificationService().notify(
-        AppNotification(
-          title: "Referral Success!",
-          message: "Your friend signed up. Here is your 4 Unit Token: 1290-4821-5099-2210-9941",
-          type: NotificationType.paymentSuccess,
-        ),
-      );
-    });
-  }
+class _ReferralScreenState extends State<ReferralScreen> {
+  final String _referralCode = "THUB-49X2"; // Simulated code
+  int _points = 0;
 
   @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
+  void initState() {
+    super.initState();
+    _loadPoints();
+  }
+
+  Future<void> _loadPoints() async {
+    final p = await StorageService.getPoints();
+    setState(() => _points = p);
+  }
+
+  Future<void> _simulateSuccessfulInvite() async {
+    // 1. Reward 3 Units
+    final currentBalance = await StorageService.getBalance();
+    await StorageService.saveBalance(currentBalance + 3.0);
     
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text("Refer & Earn"),
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        leading: BackButton(color: isDark ? Colors.white : Colors.black),
-      ),
-      body: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: isDark ? [AppTheme.darkBackground, AppTheme.darkSurface] : [AppTheme.backgroundColor, Colors.white],
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-          ),
-        ),
-        child: SafeArea(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                const SizedBox(height: 20),
-                Container(
-                  padding: const EdgeInsets.all(32),
-                  decoration: BoxDecoration(
-                    color: Colors.amber.withValues(alpha: 0.1),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(Icons.stars_rounded, color: Colors.amber, size: 80),
-                ),
-                const SizedBox(height: 32),
-                const Text("Invite Friends, Get Free Tokens!",
-                    textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, height: 1.2)),
-                const SizedBox(height: 12),
-                const Text("Share your code and earn a FREE 4 Unit Token for every friend who downloads the app.",
-                    textAlign: TextAlign.center,
-                    style: TextStyle(color: AppTheme.subTextColor, fontSize: 16)),
-                const SizedBox(height: 48),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
-                  decoration: BoxDecoration(
-                    color: isDark ? AppTheme.darkCard : Colors.white,
-                    borderRadius: BorderRadius.circular(20),
-                    boxShadow: [
-                      BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, 4))
-                    ],
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text("Your Invite Code", style: TextStyle(color: AppTheme.subTextColor, fontSize: 14)),
-                      const SizedBox(height: 12),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Text("TH-MORGAN-2026",
-                              style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, letterSpacing: 2)),
-                          IconButton(
-                            onPressed: () {
-                              Clipboard.setData(const ClipboardData(text: "TH-MORGAN-2026"));
-                              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Code copied!")));
-                            },
-                            icon: const Icon(Icons.copy_rounded, color: AppTheme.primaryColor),
-                          )
-                        ],
-                      )
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 40),
-                ElevatedButton(
-                  onPressed: () => _sharePlayStoreLink(context),
-                  style: ElevatedButton.styleFrom(
-                    minimumSize: const Size(double.infinity, 60),
-                    backgroundColor: Colors.amber,
-                    foregroundColor: Colors.black,
-                  ),
-                  child: const Text("Share Google Play Link", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                ),
-                const SizedBox(height: 48),
-                const Row(
-                  children: [
-                    Icon(Icons.people_alt_rounded, color: AppTheme.primaryColor),
-                    SizedBox(width: 8),
-                    Text("Successful Referrals (2)", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                _referralTile(name: "Jane Doe", status: "Completed", units: "+4 Units", isDark: isDark),
-                _referralTile(name: "Mark T.", status: "Pending", units: "Waiting...", isDark: isDark),
-              ],
+    // 2. Increase Points (Visual only)
+    await StorageService.savePoints(_points + 250);
+    _loadPoints();
+
+    if (!mounted) return;
+
+    // 3. Show "Thank You" and Success message
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.check_circle_rounded, color: Colors.green, size: 80),
+            const SizedBox(height: 24),
+            const Text(
+              "THANK YOU!",
+              style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.green),
             ),
-          ),
+            const SizedBox(height: 12),
+            const Text(
+              "Your friend has joined Token Hub! As a token of our appreciation, we have added 3 FREE Units to your meter balance.",
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 16),
+            ),
+            const SizedBox(height: 24),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text("Awesome!"),
+            ),
+          ],
         ),
       ),
     );
   }
 
-  Widget _referralTile({required String name, required String status, required String units, required bool isDark}) {
-    bool isCompleted = status == "Completed";
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: isDark ? AppTheme.darkCard : Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: isDark ? Colors.white12 : Colors.black12),
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text("Refer & Earn"),
       ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Row(
-            children: [
-              CircleAvatar(
-                backgroundColor: isCompleted ? Colors.green.withValues(alpha: 0.1) : Colors.orange.withValues(alpha: 0.1),
-                child: Icon(isCompleted ? Icons.check_circle_rounded : Icons.pending_rounded, 
-                  color: isCompleted ? Colors.green : Colors.orange),
-              ),
-              const SizedBox(width: 16),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(32),
+              decoration: AppTheme.premiumCardDecoration(isDark: isDark),
+              child: Column(
                 children: [
-                  Text(name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                  Text(status, style: TextStyle(color: AppTheme.subTextColor, fontSize: 12)),
+                  const Icon(Icons.stars_rounded, color: Colors.amber, size: 80),
+                  const SizedBox(height: 16),
+                  Text(
+                    "$_points Points",
+                    style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold),
+                  ),
+                  const Text(
+                    "Your Loyalty Balance",
+                    style: TextStyle(color: AppTheme.subTextColor),
+                  ),
+                  const SizedBox(height: 32),
+                  const Divider(),
+                  const SizedBox(height: 24),
+                  const Text(
+                    "Invite a friend and get 3 FREE Electricity Units instantly when they buy their first token!",
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppTheme.primaryColor),
+                  ),
                 ],
               ),
-            ],
-          ),
-          Text(units, style: TextStyle(color: isCompleted ? Colors.green : AppTheme.subTextColor, fontWeight: FontWeight.bold)),
-        ],
+            ),
+            const SizedBox(height: 40),
+            ElevatedButton.icon(
+              onPressed: _simulateSuccessfulInvite,
+              icon: const Icon(Icons.celebration_rounded),
+              label: const Text("Simulate Successful Invite (Reward)"),
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
+            ),
+            const SizedBox(height: 24),
+            const Text(
+              "Your Referral Code",
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+            ),
+            const SizedBox(height: 12),
+            GestureDetector(
+              onTap: () {
+                Clipboard.setData(ClipboardData(text: _referralCode));
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Code copied to clipboard!")));
+              },
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+                decoration: BoxDecoration(
+                  color: AppTheme.primaryColor.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: AppTheme.primaryColor.withValues(alpha: 0.3), width: 2),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      _referralCode,
+                      style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, letterSpacing: 2, color: AppTheme.primaryColor),
+                    ),
+                    const Icon(Icons.copy_rounded, color: AppTheme.primaryColor),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 40),
+            ElevatedButton.icon(
+              onPressed: () {
+                // In a real app, use share_plus package
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Opening share options...")));
+              },
+              icon: const Icon(Icons.share_rounded),
+              label: const Text("Share Invitation Link"),
+            ),
+          ],
+        ),
       ),
     );
   }

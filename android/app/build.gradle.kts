@@ -37,8 +37,8 @@ android {
             signingConfig = signingConfigs.getByName("debug")
             
             // Protect the app by enabling minification and shrinking
-            minifyEnabled = true
-            shrinkResources = true
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }

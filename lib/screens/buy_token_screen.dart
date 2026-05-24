@@ -8,6 +8,7 @@ import '../services/storage_service.dart';
 import '../services/smart_meter_service.dart';
 import '../services/payment_service.dart';
 import '../services/notification_service.dart';
+import '../services/security_service.dart';
 
 class BuyTokenScreen extends StatefulWidget {
   const BuyTokenScreen({super.key});
@@ -205,6 +206,11 @@ class _BuyTokenScreenState extends State<BuyTokenScreen> {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: ["500", "1000", "2000", "5000"].map((amt) => _quickAmtChip(amt)).toList(),
         ),
+        const SizedBox(height: 8),
+        const Text(
+          "* A platform fee of KES 5 is applied to every purchase.",
+          style: TextStyle(color: AppTheme.errorColor, fontSize: 11, fontWeight: FontWeight.w500),
+        ),
       ],
     );
   }
@@ -384,7 +390,16 @@ class _BuyTokenScreenState extends State<BuyTokenScreen> {
     );
   }
 
-  void _startPayment() {
+  Future<void> _startPayment() async {
+    // 1. National Level Security: Biometric Authorization
+    final security = SecurityService();
+    final authenticated = await security.authenticateWithBiometrics();
+    if (!authenticated) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Authentication failed. Transaction cancelled.")));
+      }
+      return;
+    }
     final amount = double.tryParse(amountController.text) ?? 0;
     if (amount <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Enter a valid amount")));
@@ -415,8 +430,8 @@ class _BuyTokenScreenState extends State<BuyTokenScreen> {
   Future<void> _handlePaymentSuccess({bool isSimulation = false}) async {
     final amount = double.parse(amountController.text);
     final currentBalance = await StorageService.getBalance();
-    // 1 KES = 0.05 units simulation
-    final newUnits = amount * 0.05;
+    // 1 KES = 0.05 units simulation (minus 5 KES platform fee)
+    final newUnits = (amount > 5 ? (amount - 5) : 0) * 0.05;
     await StorageService.saveBalance(currentBalance + newUnits);
 
     // Save transaction
@@ -463,6 +478,7 @@ class _BuyTokenScreenState extends State<BuyTokenScreen> {
   }
 
   void _showSuccessDialog(BuildContext context, String amount, String units, String time, String token, {bool isSimulation = false}) {
+    HapticFeedback.heavyImpact(); // Success haptic feedback
     showDialog(
       context: context,
       barrierDismissible: false,

@@ -20,4 +20,8 @@ const transactionSchema = new mongoose.Schema({
   timestamp: { type: Date, default: Date.now }
 });
 
+transactionSchema.index({ user: 1, timestamp: -1 });
+transactionSchema.index({ checkoutRequestId: 1 });
+transactionSchema.index({ meterNumber: 1 });
+
 module.exports = mongoose.model('Transaction', transactionSchema);

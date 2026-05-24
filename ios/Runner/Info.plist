@@ -66,5 +66,11 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<key>NSCameraUsageDescription</key>
+	<string>Token Hub needs camera access to scan meter barcodes and capture profile photos.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Token Hub needs your location to find nearby vendors and service centers.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Token Hub needs photo library access to upload profile pictures and receipt screenshots.</string>
 </dict>
 </plist>

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../theme/app_theme.dart';
 import '../services/storage_service.dart';
 
@@ -154,7 +155,7 @@ class _IssueResolutionScreenState extends State<IssueResolutionScreen> {
                                   decoration: BoxDecoration(
                                     color: isSelected ? AppTheme.primaryColor.withValues(alpha: 0.1) : (isDark ? AppTheme.darkCard : Colors.white),
                                     border: Border.all(
-                                      color: isSelected ? AppTheme.primaryColor : (isDark ? Colors.white12 : Colors.black12),
+                                      color: isSelected ? AppTheme.primaryColor : (isDark ? Colors.white24 : Colors.black26),
                                       width: isSelected ? 2 : 1,
                                     ),
                                     borderRadius: BorderRadius.circular(16),
@@ -185,13 +186,35 @@ class _IssueResolutionScreenState extends State<IssueResolutionScreen> {
               ),
               Padding(
                 padding: const EdgeInsets.all(24),
-                child: ElevatedButton(
-                  onPressed: _submitDispute,
-                  style: ElevatedButton.styleFrom(
-                    minimumSize: const Size(double.infinity, 60),
-                    backgroundColor: AppTheme.accentColor,
-                  ),
-                  child: const Text("Submit for Resolution", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
+                child: Column(
+                  children: [
+                    ElevatedButton(
+                      onPressed: _submitDispute,
+                      style: ElevatedButton.styleFrom(
+                        minimumSize: const Size(double.infinity, 60),
+                        backgroundColor: AppTheme.accentColor,
+                      ),
+                      child: const Text("Submit for Resolution", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
+                    ),
+                    const SizedBox(height: 16),
+                    TextButton.icon(
+                      onPressed: () async {
+                        final Uri phoneUri = Uri(scheme: 'tel', path: '+254700000000');
+                        if (await canLaunchUrl(phoneUri)) {
+                          await launchUrl(phoneUri);
+                        } else {
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Could not launch phone dialer.")));
+                          }
+                        }
+                      },
+                      icon: const Icon(Icons.support_agent_rounded, color: AppTheme.primaryColor),
+                      label: const Text(
+                        "Can't find help? Contact Customer Care",
+                        style: TextStyle(color: AppTheme.primaryColor, fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                  ],
                 ),
               )
             ],

@@ -1,5 +1,6 @@
 import 'dart:async';
-import 'dart:math';
+import 'package:http/http.dart' as http;
+import 'api_service.dart';
 
 enum ConnectionType { wifi, mobile, none }
 
@@ -14,18 +15,35 @@ class NetworkService {
   bool _isOnline = true;
   bool get isOnline => _isOnline;
 
-  /// Simulates an initial network check
+  /// Performs a real connectivity check by pinging a reliable endpoint.
   Future<bool> checkConnectivity() async {
-    // 98% of the time simulate being online to prevent blocking the user constantly, 
-    // but allow 2% failure for realistic mock.
-    _isOnline = Random().nextDouble() > 0.02;
+    try {
+      final response = await http.get(
+        Uri.parse('https://clients3.google.com/generate_204'),
+      ).timeout(const Duration(seconds: 5));
+      _isOnline = response.statusCode == 204 || response.statusCode == 200;
+    } catch (_) {
+      _isOnline = false;
+    }
     _statusController.add(_isOnline);
     return _isOnline;
   }
 
-  /// Forces the network state (useful for simulating drops in UI)
+  /// Forces the network state (useful for testing or manual overrides)
   void setSimulatedNetworkState(bool isOnline) {
     _isOnline = isOnline;
     _statusController.add(_isOnline);
+  }
+
+  /// Verifies if the backend server is actually reachable
+  Future<bool> isBackendReachable() async {
+    try {
+      final response = await http.get(
+        Uri.parse(ApiService.baseUrl.replaceFirst('/api', '')),
+      ).timeout(const Duration(seconds: 5));
+      return response.statusCode == 200;
+    } catch (_) {
+      return false;
+    }
   }
 }

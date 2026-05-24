@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
+import '../services/ai_assistant_service.dart';
 
 class ChatScreen extends StatefulWidget {
   const ChatScreen({super.key});
@@ -9,177 +10,183 @@ class ChatScreen extends StatefulWidget {
 }
 
 class _ChatScreenState extends State<ChatScreen> {
-  final TextEditingController _messageController = TextEditingController();
+  final TextEditingController _controller = TextEditingController();
   final List<Map<String, dynamic>> _messages = [
     {
-      "isMe": false,
-      "text": "Hello! I'm your Token Hub Support Agent. How can I help you today?",
-      "time": "Now"
+      'text': 'Hello! I am Token Wise. How can I assist you with your tokens today?',
+      'isUser': false,
+      'time': DateTime.now(),
     }
   ];
+  final ScrollController _scrollController = ScrollController();
+  bool _isTyping = false;
 
-  void _sendMessage() {
-    if (_messageController.text.trim().isEmpty) return;
-    
+  void _sendMessage() async {
+    final text = _controller.text.trim();
+    if (text.isEmpty) return;
+
     setState(() {
       _messages.add({
-        "isMe": true,
-        "text": _messageController.text.trim(),
-        "time": "Just now"
+        'text': text,
+        'isUser': true,
+        'time': DateTime.now(),
       });
+      _controller.clear();
+      _isTyping = true;
     });
-    
-    _messageController.clear();
-    
-    // Simulate agent typing
-    Future.delayed(const Duration(seconds: 2), () {
-      if (!mounted) return;
+
+    _scrollToBottom();
+
+    // Get AI Response
+    final response = await AiAssistantService.getResponse(text);
+
+    await Future.delayed(const Duration(milliseconds: 800)); // Simulate thinking
+
+    if (mounted) {
       setState(() {
         _messages.add({
-          "isMe": false,
-          "text": "Thanks for reaching out! Our team is looking into this. Anything else I can assist with?",
-          "time": "Just now"
+          'text': response,
+          'isUser': false,
+          'time': DateTime.now(),
         });
+        _isTyping = false;
       });
+      _scrollToBottom();
+    }
+  }
+
+  void _scrollToBottom() {
+    Future.delayed(const Duration(milliseconds: 100), () {
+      if (_scrollController.hasClients) {
+        _scrollController.animateTo(
+          _scrollController.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+        );
+      }
     });
   }
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
       appBar: AppBar(
-        title: const Row(
+        title: Row(
           children: [
             CircleAvatar(
-              backgroundColor: Colors.white24,
-              child: Icon(Icons.support_agent_rounded, color: Colors.white, size: 20),
+              backgroundColor: Colors.white,
+              radius: 18,
+              child: Image.asset('assets/images/logo.png', width: 24),
             ),
-            SizedBox(width: 12),
-            Column(
+            const SizedBox(width: 12),
+            const Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text("Live Support", style: TextStyle(fontSize: 16)),
-                Text("Typically replies in 2 mins", style: TextStyle(fontSize: 11, color: Colors.white70)),
+                Text("Token Wise AI", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                Text("Online Assistant", style: TextStyle(fontSize: 10, color: Colors.greenAccent)),
               ],
-            )
+            ),
           ],
         ),
-        backgroundColor: AppTheme.primaryColor,
-        foregroundColor: Colors.white,
       ),
-      body: Container(
-        color: isDark ? AppTheme.darkBackground : AppTheme.backgroundColor,
-        child: Column(
-          children: [
-            Expanded(
-              child: ListView.builder(
-                padding: const EdgeInsets.all(20),
-                itemCount: _messages.length,
-                itemBuilder: (context, index) {
-                  final msg = _messages[index];
-                  return _buildChatBubble(msg['text'], msg['isMe'], msg['time'], isDark);
-                },
+      body: Column(
+        children: [
+          Expanded(
+            child: ListView.builder(
+              controller: _scrollController,
+              padding: const EdgeInsets.all(16),
+              itemCount: _messages.length,
+              itemBuilder: (context, index) {
+                final msg = _messages[index];
+                return _buildMessageBubble(msg['text'], msg['isUser'], isDark);
+              },
+            ),
+          ),
+          if (_isTyping)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Row(
+                children: [
+                  Text("Token Wise is typing...", style: TextStyle(fontSize: 12, fontStyle: FontStyle.italic, color: isDark ? Colors.white70 : Colors.black54)),
+                ],
               ),
             ),
-            _buildMessageInput(isDark),
-          ],
-        ),
+          _buildInputArea(isDark),
+        ],
       ),
     );
   }
 
-  Widget _buildChatBubble(String text, bool isMe, String time, bool isDark) {
+  Widget _buildMessageBubble(String text, bool isUser, bool isDark) {
     return Align(
-      alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
+      alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
-        margin: const EdgeInsets.only(bottom: 16),
-        padding: const EdgeInsets.all(16),
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.75),
         decoration: BoxDecoration(
-          color: isMe ? AppTheme.primaryColor : (isDark ? AppTheme.darkCard : Colors.white),
+          color: isUser 
+              ? AppTheme.primaryColor 
+              : (isDark ? AppTheme.darkSurface : Colors.grey.shade200),
           borderRadius: BorderRadius.only(
             topLeft: const Radius.circular(20),
             topRight: const Radius.circular(20),
-            bottomLeft: isMe ? const Radius.circular(20) : const Radius.circular(4),
-            bottomRight: isMe ? const Radius.circular(4) : const Radius.circular(20),
+            bottomLeft: Radius.circular(isUser ? 20 : 4),
+            bottomRight: Radius.circular(isUser ? 4 : 20),
           ),
           boxShadow: [
-            BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 5, offset: const Offset(0, 2))
-          ]
-        ),
-        child: Column(
-          crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-          children: [
-            Text(
-              text,
-              style: TextStyle(
-                color: isMe ? Colors.white : (isDark ? Colors.white : Colors.black87),
-                fontSize: 15,
-              ),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              time,
-              style: TextStyle(
-                color: isMe ? Colors.white70 : AppTheme.subTextColor,
-                fontSize: 10,
-              ),
-            ),
+            if (!isUser) BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, 4)),
           ],
+        ),
+        child: Text(
+          text,
+          style: TextStyle(
+            color: isUser ? Colors.white : (isDark ? Colors.white : Colors.black87),
+            fontSize: 15,
+          ),
         ),
       ),
     );
   }
 
-  Widget _buildMessageInput(bool isDark) {
+  Widget _buildInputArea(bool isDark) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: isDark ? AppTheme.darkSurface : Colors.white,
+        color: isDark ? AppTheme.darkBackground : Colors.white,
         boxShadow: [
-          BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, -4))
-        ]
+          BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 20, offset: const Offset(0, -5)),
+        ],
       ),
-      child: SafeArea(
-        child: Row(
-          children: [
-            IconButton(
-              icon: const Icon(Icons.attach_file_rounded, color: AppTheme.subTextColor),
-              onPressed: () {},
-            ),
-            Expanded(
-              child: TextField(
-                controller: _messageController,
-                decoration: InputDecoration(
-                  hintText: "Type a message...",
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(24),
-                    borderSide: BorderSide.none,
-                  ),
-                  filled: true,
-                  fillColor: isDark ? AppTheme.darkBackground : AppTheme.backgroundColor,
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+      child: Row(
+        children: [
+          Expanded(
+            child: TextField(
+              controller: _controller,
+              decoration: InputDecoration(
+                hintText: "Ask anything about tokens...",
+                filled: true,
+                fillColor: isDark ? Colors.white.withValues(alpha: 0.05) : Colors.grey.shade100,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(30),
+                  borderSide: BorderSide.none,
                 ),
-                textCapitalization: TextCapitalization.sentences,
-                onSubmitted: (_) => _sendMessage(),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
               ),
+              onSubmitted: (_) => _sendMessage(),
             ),
-            const SizedBox(width: 8),
-            Container(
-              decoration: const BoxDecoration(
-                color: AppTheme.primaryColor,
-                shape: BoxShape.circle,
-              ),
-              child: IconButton(
-                icon: const Icon(Icons.send_rounded, color: Colors.white, size: 20),
-                onPressed: _sendMessage,
-              ),
+          ),
+          const SizedBox(width: 8),
+          CircleAvatar(
+            backgroundColor: AppTheme.primaryColor,
+            child: IconButton(
+              icon: const Icon(Icons.send_rounded, color: Colors.white),
+              onPressed: _sendMessage,
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

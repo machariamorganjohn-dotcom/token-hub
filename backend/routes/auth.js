@@ -136,4 +136,84 @@ router.post('/sync-balance', async (req, res) => {
   }
 });
 
+// @desc    Manually update balance (Sync with physical meter)
+// @route   POST /api/auth/update-balance
+// @access  Private
+router.post('/update-balance', async (req, res) => {
+  const { userId, newBalance } = req.body;
+
+  try {
+    const user = await User.findById(userId);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    user.balance = newBalance;
+    user.lastUnitSyncAt = Date.now();
+    await user.save();
+
+    res.json({ 
+      message: 'Balance updated successfully', 
+      balance: user.balance,
+      lastUnitSyncAt: user.lastUnitSyncAt
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// @desc    Forgot Password - Send Reset Code
+// @route   POST /api/auth/forgot-password
+// @access  Public
+router.post('/forgot-password', async (req, res) => {
+  const { email } = req.body;
+
+  try {
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.status(404).json({ message: 'User with this email not found' });
+    }
+
+    // Generate 6-digit code
+    const resetCode = Math.floor(100000 + Math.random() * 900000).toString();
+    user.resetPasswordToken = resetCode;
+    user.resetPasswordExpires = Date.now() + 3600000; // 1 hour
+    await user.save();
+
+    // SIMULATED EMAIL SENDING (In production, use nodemailer)
+    console.log(`[EMAIL SIMULATOR] To: ${email} | Subject: Token Hub Password Reset | Code: ${resetCode}`);
+    
+    res.json({ message: 'Password reset code sent to your email' });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// @desc    Reset Password - Verify Code & Update
+// @route   POST /api/auth/reset-password
+// @access  Public
+router.post('/reset-password', async (req, res) => {
+  const { email, code, newPassword } = req.body;
+
+  try {
+    const user = await User.findOne({
+      email,
+      resetPasswordToken: code,
+      resetPasswordExpires: { $gt: Date.now() }
+    });
+
+    if (!user) {
+      return res.status(400).json({ message: 'Invalid or expired reset code' });
+    }
+
+    // Update password
+    user.password = newPassword;
+    user.resetPasswordToken = undefined;
+    user.resetPasswordExpires = undefined;
+    await user.save();
+
+    res.json({ message: 'Password reset successfully' });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
 module.exports = router;

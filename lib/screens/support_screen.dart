@@ -111,7 +111,7 @@ class SupportScreen extends StatelessWidget {
                     decoration: BoxDecoration(
                       color: isDark ? AppTheme.darkCard : Colors.white,
                       borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: isDark ? Colors.white12 : Colors.black12),
+                      border: Border.all(color: isDark ? Colors.white24 : Colors.black26),
                     ),
                     child: Row(
                       children: [
@@ -159,17 +159,17 @@ class SupportScreen extends StatelessWidget {
           BoxShadow(color: AppTheme.primaryColor.withValues(alpha: 0.3), blurRadius: 15, offset: const Offset(0, 8)),
         ],
       ),
-      child: const Row(
+      child: Row(
         children: [
-          Icon(Icons.support_agent_rounded, color: Colors.white, size: 48),
-          SizedBox(width: 20),
+          const Icon(Icons.support_agent_rounded, color: Colors.white, size: 48),
+          const SizedBox(width: 20),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text("We're Here to Help", style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
-                SizedBox(height: 4),
-                Text("Fast, reliable assistance for all your token needs.", style: TextStyle(color: Colors.white70, fontSize: 13)),
+                const Text("We're Here to Help", style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 4),
+                Text("Fast, reliable assistance for all your token needs.", style: TextStyle(color: Colors.white.withValues(alpha: 0.9), fontSize: 13)),
               ],
             ),
           ),
@@ -219,7 +219,7 @@ class SupportScreen extends StatelessWidget {
       decoration: BoxDecoration(
         color: isDark ? AppTheme.darkCard : Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: isDark ? Colors.white12 : Colors.black12),
+        border: Border.all(color: isDark ? Colors.white24 : Colors.black26),
       ),
       child: ExpansionTile(
         title: Text(question, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),

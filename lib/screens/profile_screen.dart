@@ -165,7 +165,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         title: const Text("My Profile"),
         backgroundColor: Colors.transparent,
         elevation: 0,
-        leading: BackButton(color: isDark ? Colors.white : Colors.black),
+        leading: const BackButton(),
       ),
       body: Container(
         decoration: BoxDecoration(
@@ -187,6 +187,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 _buildSettingsSection(isDark, themeProvider),
                 const SizedBox(height: 40),
                 _buildLogoutButton(),
+                const SizedBox(height: 24),
+                const Text(
+                  "Version 1.2.0",
+                  style: TextStyle(color: AppTheme.subTextColor, fontSize: 12),
+                ),
+                const SizedBox(height: 4),
+                const Text(
+                  "Powered by Token Hub Security",
+                  style: TextStyle(
+                    color: AppTheme.subTextColor,
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 1,
+                  ),
+                ),
+                const SizedBox(height: 40),
               ],
             ),
           ),
@@ -435,11 +451,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
   // ── Logout ──────────────────────────────────────────────────────────────────
   Widget _buildLogoutButton() {
     return TextButton.icon(
-      onPressed: () {
-        Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (context) => const LoginScreen()),
-          (route) => false,
-        );
+      onPressed: () async {
+        await StorageService.clearAll();
+        if (context.mounted) {
+          Navigator.of(context).pushAndRemoveUntil(
+            MaterialPageRoute(builder: (context) => const LoginScreen()),
+            (route) => false,
+          );
+        }
       },
       icon: const Icon(Icons.logout_rounded, color: AppTheme.errorColor),
       label: const Text("Sign Out",
