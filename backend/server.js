@@ -52,6 +52,7 @@ app.use('/api/auth', authLimiter, require('./routes/auth'));
 app.use('/api/meters', require('./routes/meter'));
 app.use('/api/transactions', transactionLimiter, require('./routes/transaction'));
 app.use('/api/admin', require('./routes/admin'));
+app.use('/api/rent', require('./routes/rent'));
 
 // Error handling middleware
 app.use((err, req, res, next) => {

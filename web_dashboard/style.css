@@ -242,3 +242,17 @@ body {
     .dash-grid { grid-template-columns: 1fr; }
     .dash-main { padding: 24px; }
 }
+
+/* Rent Dashboard Specific */
+.top-nav { display: flex; gap: 16px; background: rgba(255,255,255,0.05); padding: 4px; border-radius: 12px; }
+.nav-btn { background: transparent; border: none; color: var(--sub-text); padding: 8px 16px; border-radius: 8px; font-weight: 600; cursor: pointer; transition: var(--transition); }
+.nav-btn.active { background: var(--primary-color); color: white; }
+.nav-btn:hover:not(.active) { color: white; background: rgba(255,255,255,0.1); }
+
+.rent-stats-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin-top: 24px; }
+.stat-box { background: rgba(255,255,255,0.03); padding: 16px; border-radius: 12px; border: 1px solid var(--border-color); }
+.stat-box .stat-label { font-size: 12px; color: var(--sub-text); display: block; margin-bottom: 8px; }
+.stat-box h4 { font-size: 24px; font-weight: 800; font-family: 'Outfit', sans-serif; }
+.text-danger { color: var(--error-color); }
+.receipt-text { display: block; margin-top: 4px; font-family: monospace; color: var(--primary-color); }
+

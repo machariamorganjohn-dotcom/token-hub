@@ -13,7 +13,7 @@ const userSchema = new mongoose.Schema({
   consumptionRate: { type: Number, default: 0.02 }, // Units per hour (default simulation)
   emergencyDebt: { type: Number, default: 0 },
   loyaltyPoints: { type: Number, default: 0 },
-  role: { type: String, enum: ['user', 'admin'], default: 'user' },
+  role: { type: String, enum: ['user', 'admin', 'landlord', 'caretaker', 'tenant'], default: 'user' },
   createdAt: { type: Date, default: Date.now },
   lastLoginAt: { type: Date },
   resetPasswordToken: { type: String },
