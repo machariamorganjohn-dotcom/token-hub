@@ -17,6 +17,7 @@ class StorageService {
     return prefs.getInt(keyPurchaseCount) ?? 0;
   }
   static const String keyUserPhone = 'user_phone';
+  static const String keyUserName = 'user_name';
   static const String keyMeters = 'saved_meters';
   static const String keyTransactions = 'user_transactions';
   static const String keyLoginHistory = 'login_history';
